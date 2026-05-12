@@ -12,7 +12,8 @@ This log is intentionally written as an engineering record rather than a launch 
 - Tightened the repo story around the real-world operating problem: the MCP governance gap around agent-connected tool surfaces in production.
 
 ### Why this mattered
-- Existing approaches in traditional API security tools, AppSec scanners, and cloud posture platforms were useful, but they could see endpoints and infrastructure posture, but not the operational blast radius of tool exposure, schema drift, or prompt-driven misuse.
+- Existing approaches in traditional API security tools, AppSec scanners, and cloud posture platforms were useful for adjacent workflows.
+- They still missed the core need: a control layer that could explain tool exposure, schema drift, and prompt-driven misuse in operator terms.
 - This release made the repo readable as an operational capability rather than a narrow technical demo.
 
 ## [0.1.0] - 2026-03-17
