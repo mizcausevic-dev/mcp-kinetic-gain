@@ -1,0 +1,38 @@
+{
+  "name": "@mizcausevic-dev/mcp-kinetic-gain",
+  "version": "0.1.0",
+  "description": "MCP server exposing all five Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, eighteen tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, and MCP Tool Cards.",
+  "type": "module",
+  "bin": {
+    "mcp-kinetic-gain": "./dist/server.js"
+  },
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/server.js"
+  },
+  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "kinetic-gain-protocol-suite", "claude"],
+  "author": "Miz Causevic",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mizcausevic-dev/mcp-kinetic-gain.git"
+  },
+  "homepage": "https://github.com/mizcausevic-dev/mcp-kinetic-gain",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  }
+}
