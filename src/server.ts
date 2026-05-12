@@ -2,13 +2,14 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
- * Exposes 24 tools across six specs:
+ * Exposes 29 tools across seven specs:
  *   - AEO Protocol            (4 tools)
  *   - Prompt Provenance       (3 tools)
  *   - Agent Cards             (4 tools)
  *   - AI Evidence Format      (3 tools)
  *   - MCP Tool Cards          (4 tools)
  *   - AI Tutor Cards          (6 tools — EdTech extension)
+ *   - Student AI Disclosure   (5 tools — EdTech extension)
  *
  * Drop into Claude Desktop / Cursor / any MCP-compatible client via stdio.
  */
@@ -63,6 +64,14 @@ import {
   handleTutorCardWellKnownUrl,
 } from "./handlers/tutor-card.js";
 
+import {
+  handleDisclosureAupCheck,
+  handleDisclosureInspect,
+  handleDisclosureValidate,
+  handleDisclosureVerifyArtifactHash,
+  handleDisclosureVerifyPromptHash,
+} from "./handlers/disclosure.js";
+
 export const handlers: Record<string, (args: any) => Promise<string>> = {
   // AEO
   aeo_fetch: handleAeoFetch,
@@ -94,11 +103,17 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   tutor_card_inspect: handleTutorCardInspect,
   tutor_card_subject_check: handleTutorCardSubjectCheck,
   tutor_card_coppa_check: handleTutorCardCoppaCheck,
+  // Student AI Disclosure (EdTech extension)
+  disclosure_validate: handleDisclosureValidate,
+  disclosure_inspect: handleDisclosureInspect,
+  disclosure_verify_artifact_hash: handleDisclosureVerifyArtifactHash,
+  disclosure_verify_prompt_hash: handleDisclosureVerifyPromptHash,
+  disclosure_aup_check: handleDisclosureAupCheck,
 };
 
 export function buildServer(): Server {
   const server = new Server(
-    { name: "mcp-kinetic-gain", version: "0.2.0" },
+    { name: "mcp-kinetic-gain", version: "0.3.0" },
     { capabilities: { tools: {} } },
   );
 
@@ -132,7 +147,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v0.2.0: listening on stdio (${toolDescriptors.length} tools across 6 specs)\n`,
+    `mcp-kinetic-gain v0.3.0: listening on stdio (${toolDescriptors.length} tools across 7 specs)\n`,
   );
 }
 

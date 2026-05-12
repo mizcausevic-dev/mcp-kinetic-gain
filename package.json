@@ -1,7 +1,7 @@
 {
   "name": "@mizcausevic-dev/mcp-kinetic-gain",
-  "version": "0.2.0",
-  "description": "MCP server exposing all six Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 24 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, and AI Tutor Cards (EdTech extension).",
+  "version": "0.3.0",
+  "description": "MCP server exposing all seven Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 29 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, and Student AI Disclosure (EdTech extensions).",
   "type": "module",
   "bin": {
     "mcp-kinetic-gain": "./dist/server.js"
@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js"
   },
-  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "kinetic-gain-protocol-suite", "claude"],
+  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "kinetic-gain-protocol-suite", "claude", "edtech"],
   "author": "Miz Causevic",
   "license": "AGPL-3.0",
   "repository": {

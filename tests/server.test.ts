@@ -482,10 +482,226 @@ describe("AI Tutor Cards", () => {
 });
 
 // ----------------------------------------------------------------------------
+// Student AI Disclosure (EdTech extension)
+// ----------------------------------------------------------------------------
+const NO_AI_DISCLOSURE = {
+  disclosure_version: "0.1",
+  disclosure_id: "d-test-no-ai",
+  created_at: "2026-05-12T14:30:00Z",
+  student: { id: "stu-1", grade_or_year: "10" },
+  assignment: { id: "a1", title: "Essay", course_id: "c1", lms: "canvas" },
+  ai_used: false,
+  artifact_hash: "sha256:" + "a".repeat(64),
+  signed_by_student: true,
+  student_signature_at: "2026-05-12T14:30:00Z",
+};
+
+const HASHED_PROMPT_DISCLOSURE = {
+  disclosure_version: "0.1",
+  disclosure_id: "d-test-hashed",
+  created_at: "2026-05-12T16:42:00Z",
+  student: { id: "stu-2", grade_or_year: "11" },
+  assignment: { id: "a2", title: "Lab Report", course_id: "c2", lms: "canvas" },
+  ai_used: true,
+  tools_used: [{ name: "Claude.ai", provider: "Anthropic", version: "claude-sonnet-4-6" }],
+  roles: ["edit"],
+  assistance_extent: "minor",
+  assistance_pct: 8,
+  prompt_evidence_mode: "hashed",
+  prompts: [
+    {
+      id: "p1",
+      hash: canonicalSha256("Please fix grammar in this paragraph: ..."),
+      at: "2026-05-12T15:55:00Z",
+      tool_index: 0,
+    },
+  ],
+  artifact_hash: "sha256:" + "b".repeat(64),
+  signed_by_student: true,
+  student_signature_at: "2026-05-12T16:42:00Z",
+};
+
+const FULL_PROMPT_DISCLOSURE = {
+  disclosure_version: "0.1",
+  disclosure_id: "d-test-full",
+  created_at: "2026-05-12T20:05:00Z",
+  student: { id: "stu-3", grade_or_year: "undergrad" },
+  assignment: { id: "a3", title: "Final Project", course_id: "cs180", lms: "moodle" },
+  ai_used: true,
+  tools_used: [{ name: "Claude.ai", provider: "Anthropic" }],
+  roles: ["draft"],
+  assistance_extent: "primary_author",
+  prompt_evidence_mode: "full",
+  prompts: [{ id: "p1", text: "Write a web scraper." }],
+  artifact_hash: canonicalSha256("print('hello')"),
+  signed_by_student: true,
+  student_signature_at: "2026-05-12T20:05:00Z",
+};
+
+describe("Student AI Disclosure", () => {
+  it("validate accepts a no-AI disclosure", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_validate!({
+        document_json: JSON.stringify(NO_AI_DISCLOSURE),
+      }),
+    );
+    expect(out.valid).toBe(true);
+    expect(out.ai_used).toBe(false);
+  });
+
+  it("validate accepts a hashed-mode AI disclosure", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_validate!({
+        document_json: JSON.stringify(HASHED_PROMPT_DISCLOSURE),
+      }),
+    );
+    expect(out.valid).toBe(true);
+    expect(out.ai_used).toBe(true);
+    expect(out.prompt_evidence_mode).toBe("hashed");
+  });
+
+  it("validate rejects ai_used=true with missing required fields", async () => {
+    const bad = { ...NO_AI_DISCLOSURE, ai_used: true };
+    const out = JSON.parse(
+      await handlers.disclosure_validate!({ document_json: JSON.stringify(bad) }),
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/tools_used|roles|assistance_extent|prompt_evidence_mode/);
+  });
+
+  it("validate rejects ai_used=false with forbidden AI fields", async () => {
+    const bad = { ...NO_AI_DISCLOSURE, ai_used: false, tools_used: [{ name: "X" }] };
+    const out = JSON.parse(
+      await handlers.disclosure_validate!({ document_json: JSON.stringify(bad) }),
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/forbids/);
+  });
+
+  it("validate rejects prompt mode mismatch (full mode with hash field)", async () => {
+    const bad = {
+      ...FULL_PROMPT_DISCLOSURE,
+      prompts: [{ id: "p1", hash: "sha256:" + "c".repeat(64) }],
+    };
+    const out = JSON.parse(
+      await handlers.disclosure_validate!({ document_json: JSON.stringify(bad) }),
+    );
+    expect(out.valid).toBe(false);
+  });
+
+  it("inspect returns a procurement-friendly summary", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_inspect!({
+        document_json: JSON.stringify(HASHED_PROMPT_DISCLOSURE),
+      }),
+    );
+    expect(out.ai_used).toBe(true);
+    expect(out.tools_used).toHaveLength(1);
+    expect(out.tools_used[0].name).toBe("Claude.ai");
+    expect(out.roles).toContain("edit");
+    expect(out.prompt_count).toBe(1);
+    expect(out.artifact_hash).toBe(HASHED_PROMPT_DISCLOSURE.artifact_hash);
+  });
+
+  it("verify_artifact_hash matches when canonical text recomputes to stored hash", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_verify_artifact_hash!({
+        document_json: JSON.stringify(FULL_PROMPT_DISCLOSURE),
+        candidate_text: "print('hello')",
+      }),
+    );
+    expect(out.ok).toBe(true);
+    expect(out.mode).toBe("canonical_text");
+  });
+
+  it("verify_artifact_hash mismatches when candidate text is different", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_verify_artifact_hash!({
+        document_json: JSON.stringify(FULL_PROMPT_DISCLOSURE),
+        candidate_text: "print('goodbye')",
+      }),
+    );
+    expect(out.error).toBe("artifact_hash_mismatch");
+    expect(out.expected).toBe(FULL_PROMPT_DISCLOSURE.artifact_hash);
+  });
+
+  it("verify_artifact_hash supports raw-bytes (base64) mode for binary artifacts", async () => {
+    const bytes = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
+    const expected =
+      "sha256:" +
+      require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+    const doc = { ...NO_AI_DISCLOSURE, artifact_hash: expected };
+    const out = JSON.parse(
+      await handlers.disclosure_verify_artifact_hash!({
+        document_json: JSON.stringify(doc),
+        candidate_bytes_base64: bytes.toString("base64"),
+      }),
+    );
+    expect(out.ok).toBe(true);
+    expect(out.mode).toBe("raw_bytes");
+  });
+
+  it("verify_prompt_hash matches when candidate text recomputes to stored prompt hash", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_verify_prompt_hash!({
+        document_json: JSON.stringify(HASHED_PROMPT_DISCLOSURE),
+        prompt_id: "p1",
+        candidate_text: "Please fix grammar in this paragraph: ...",
+      }),
+    );
+    expect(out.ok).toBe(true);
+  });
+
+  it("verify_prompt_hash errors when disclosure is not in hashed mode", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_verify_prompt_hash!({
+        document_json: JSON.stringify(FULL_PROMPT_DISCLOSURE),
+        prompt_id: "p1",
+        candidate_text: "anything",
+      }),
+    );
+    expect(out.error).toBe("wrong_prompt_mode");
+  });
+
+  it("verify_prompt_hash errors when prompt_id is unknown", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_verify_prompt_hash!({
+        document_json: JSON.stringify(HASHED_PROMPT_DISCLOSURE),
+        prompt_id: "p-unknown",
+        candidate_text: "anything",
+      }),
+    );
+    expect(out.error).toBe("prompt_not_found");
+    expect(out.available_ids).toEqual(["p1"]);
+  });
+
+  it("aup_check reports declared_compliant when aup_uri + policy_compliant.declared=true", async () => {
+    const doc = {
+      ...NO_AI_DISCLOSURE,
+      aup_uri: "https://example.edu/.well-known/ai-aup.json",
+      policy_compliant: { declared: true },
+    };
+    const out = JSON.parse(
+      await handlers.disclosure_aup_check!({ document_json: JSON.stringify(doc) }),
+    );
+    expect(out.status).toBe("declared_compliant");
+  });
+
+  it("aup_check reports no_aup_reference when aup_uri is absent", async () => {
+    const out = JSON.parse(
+      await handlers.disclosure_aup_check!({
+        document_json: JSON.stringify(NO_AI_DISCLOSURE),
+      }),
+    );
+    expect(out.status).toBe("no_aup_reference");
+  });
+});
+
+// ----------------------------------------------------------------------------
 // Cross-cutting
 // ----------------------------------------------------------------------------
 describe("Unknown tool", () => {
-  it("server exposes exactly the 24 declared tools (5 specs + EdTech extension)", () => {
-    expect(Object.keys(handlers)).toHaveLength(24);
+  it("server exposes exactly the 29 declared tools (5 core specs + 2 EdTech extensions)", () => {
+    expect(Object.keys(handlers)).toHaveLength(29);
   });
 });

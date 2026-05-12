@@ -1,7 +1,13 @@
 /**
  * MCP tool descriptors for every spec in the Kinetic Gain Protocol Suite.
- * 18 tools total: AEO (4), Prompt Provenance (3), Agent Cards (4),
- * AI Evidence (3), MCP Tool Cards (4).
+ * 29 tools total across 7 specs:
+ *   AEO Protocol            (4)
+ *   Prompt Provenance       (3)
+ *   Agent Cards             (4)
+ *   AI Evidence Format      (3)
+ *   MCP Tool Cards          (4)
+ *   AI Tutor Cards          (6) — EdTech extension
+ *   Student AI Disclosure   (5) — EdTech extension
  */
 export const toolDescriptors = [
   // --------------------------------------------------------------------------
@@ -224,6 +230,143 @@ export const toolDescriptors = [
   {
     name: "tool_card_validate",
     description: "Validate an MCP Tool Card JSON document against the v0.1 schema.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string" } },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // AI Tutor Cards (EdTech extension)
+  // --------------------------------------------------------------------------
+  {
+    name: "tutor_card_well_known_url",
+    description: "Compute the canonical AI Tutor Card well-known URL (convention: /.well-known/tutors/<tutor_id>.json).",
+    inputSchema: {
+      type: "object",
+      required: ["origin", "tutor_id"],
+      additionalProperties: false,
+      properties: {
+        origin: { type: "string", format: "uri" },
+        tutor_id: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "tutor_card_fetch",
+    description: "Fetch a Tutor Card from a URL. Returns the parsed, schema-validated JSON.",
+    inputSchema: {
+      type: "object",
+      required: ["url"],
+      additionalProperties: false,
+      properties: { url: { type: "string", format: "uri" } },
+    },
+  },
+  {
+    name: "tutor_card_validate",
+    description: "Validate an AI Tutor Card JSON document against the v0.1 schema, including the COPPA conditional rule (age_range_min < 13 ⇒ coppa_compliant must be true).",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string" } },
+    },
+  },
+  {
+    name: "tutor_card_inspect",
+    description: "Structured summary of a Tutor Card: tutor identity, audience, pedagogy, subject scope counts, safety strength, FERPA/COPPA/GDPR posture, evaluation count, COPPA-rule check.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "tutor_card_subject_check",
+    description: "Classify a topic against the tutor's subject scope. Returns one of: primary, included, excluded, unknown — with the matched term when applicable.",
+    inputSchema: {
+      type: "object",
+      required: ["query"],
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+        query: { type: "string", description: "Topic to classify, e.g. 'algebra' or 'differential equations'." },
+      },
+    },
+  },
+  {
+    name: "tutor_card_coppa_check",
+    description: "Enforce the spec's COPPA conditional rule: if audience.age_range_min < 13, data_privacy.coppa_compliant MUST be true. Returns { ok: true } or { error: coppa_violation, reason }.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // Student AI Disclosure (EdTech extension)
+  // --------------------------------------------------------------------------
+  {
+    name: "disclosure_validate",
+    description: "Validate a Student AI Disclosure JSON document against the v0.1 schema. Enforces conditional rules (ai_used true requires tools/roles/extent/prompt_mode; ai_used false forbids them; prompt mode gates prompts presence).",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string" } },
+    },
+  },
+  {
+    name: "disclosure_inspect",
+    description: "Structured summary of a Student AI Disclosure: assignment identity, AI usage facts, tools used (with back-refs to agent / tutor cards), role taxonomy, assistance extent, prompt-mode + count, artifact hash, policy posture, signature + acknowledgment.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string" } },
+    },
+  },
+  {
+    name: "disclosure_verify_artifact_hash",
+    description: "Recompute SHA-256 over a candidate artifact and compare to disclosure.artifact_hash. Pass either `candidate_text` (canonical SHA-256: LF, no trailing newline) for text artifacts, or `candidate_bytes_base64` (raw-bytes SHA-256) for binary artifacts like PDFs / images. Returns ok=true on match, otherwise { error: artifact_hash_mismatch, expected, recomputed }.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: {
+        document_json: { type: "string" },
+        candidate_text: { type: "string", description: "Text artifact (canonical-text mode)." },
+        candidate_bytes_base64: { type: "string", description: "Base64-encoded raw artifact bytes (raw-bytes mode)." },
+      },
+    },
+  },
+  {
+    name: "disclosure_verify_prompt_hash",
+    description: "Verify a single prompt hash in a hashed-mode disclosure. Looks up prompt_id and compares canonical SHA-256 of candidate_text. Returns ok=true on match or { error: prompt_hash_mismatch, expected, recomputed }. Errors with wrong_prompt_mode if prompt_evidence_mode is not 'hashed'.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json", "prompt_id", "candidate_text"],
+      additionalProperties: false,
+      properties: {
+        document_json: { type: "string" },
+        prompt_id: { type: "string" },
+        candidate_text: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "disclosure_aup_check",
+    description: "Surface the disclosure's policy posture: whether an aup_uri is referenced and what the student declared. Status is one of: declared_compliant, declared_non_compliant, aup_referenced_but_unclaimed, no_aup_reference. v0.3 reports declared posture only; future versions will fetch and cross-check against the Classroom AI AUP spec.",
     inputSchema: {
       type: "object",
       required: ["document_json"],

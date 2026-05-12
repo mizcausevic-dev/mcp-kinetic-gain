@@ -341,3 +341,183 @@ export const tutorCardSchema = z
   })
   .strict();
 export type TutorCard = z.infer<typeof tutorCardSchema>;
+
+// ----------------------------------------------------------------------------
+// Student AI Disclosure (EdTech extension of the Suite)
+// ----------------------------------------------------------------------------
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+
+export const studentDisclosureSchema = z
+  .object({
+    disclosure_version: z.string(),
+    disclosure_id: z.string().min(1),
+    created_at: z.string(),
+    student: z.object({
+      id: z.string().min(1),
+      display_name: z.string().min(1).optional(),
+      grade_or_year: z.string().min(1).optional(),
+      institution_id: z.string().min(1).optional(),
+    }),
+    assignment: z.object({
+      id: z.string().min(1),
+      title: z.string().min(1),
+      course_id: z.string().min(1),
+      lms: z
+        .enum([
+          "canvas",
+          "schoology",
+          "google-classroom",
+          "moodle",
+          "d2l-brightspace",
+          "blackboard",
+          "other",
+        ])
+        .optional(),
+      due_at: z.string().optional(),
+    }),
+    ai_used: z.boolean(),
+    tools_used: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          provider: z.string().min(1).optional(),
+          version: z.string().min(1).optional(),
+          agent_card_uri: z.string().optional(),
+          tutor_card_uri: z.string().optional(),
+        }),
+      )
+      .min(1)
+      .optional(),
+    roles: z
+      .array(
+        z.enum([
+          "brainstorm",
+          "outline",
+          "draft",
+          "edit",
+          "translate",
+          "cite_check",
+          "code_completion",
+          "code_review",
+          "research_synthesis",
+          "tutor_dialog",
+          "image_generation",
+          "data_analysis",
+          "other",
+        ]),
+      )
+      .min(1)
+      .optional(),
+    roles_other_text: z.string().min(1).optional(),
+    assistance_extent: z.enum(["minor", "substantial", "primary_author"]).optional(),
+    assistance_pct: z.number().int().min(0).max(100).optional(),
+    prompt_evidence_mode: z.enum(["full", "hashed", "omitted"]).optional(),
+    prompts: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          text: z.string().min(1).optional(),
+          hash: z.string().regex(SHA256_PATTERN).optional(),
+          at: z.string().optional(),
+          tool_index: z.number().int().min(0).optional(),
+        }),
+      )
+      .min(1)
+      .optional(),
+    artifact_hash: z.string().regex(SHA256_PATTERN),
+    artifact_uri: z.string().optional(),
+    aup_uri: z.string().optional(),
+    policy_compliant: z
+      .object({
+        declared: z.boolean(),
+        reason: z.string().min(1).optional(),
+      })
+      .optional(),
+    signed_by_student: z.literal(true),
+    student_signature_at: z.string(),
+    teacher_acknowledged: z
+      .object({
+        acknowledged: z.boolean(),
+        by: z.string().min(1),
+        at: z.string(),
+        note: z.string().min(1).optional(),
+      })
+      .optional(),
+  })
+  .strict()
+  .superRefine((doc, ctx) => {
+    // Conditional rule: ai_used true ⇒ tools_used / roles / assistance_extent / prompt_evidence_mode required.
+    if (doc.ai_used) {
+      const missing: string[] = [];
+      if (!doc.tools_used || doc.tools_used.length === 0) missing.push("tools_used");
+      if (!doc.roles || doc.roles.length === 0) missing.push("roles");
+      if (!doc.assistance_extent) missing.push("assistance_extent");
+      if (!doc.prompt_evidence_mode) missing.push("prompt_evidence_mode");
+      if (missing.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `ai_used=true requires fields: ${missing.join(", ")}`,
+        });
+      }
+    } else {
+      // ai_used false ⇒ AI-only fields MUST NOT be present.
+      const forbidden: string[] = [];
+      if (doc.tools_used !== undefined) forbidden.push("tools_used");
+      if (doc.roles !== undefined) forbidden.push("roles");
+      if (doc.assistance_extent !== undefined) forbidden.push("assistance_extent");
+      if (doc.assistance_pct !== undefined) forbidden.push("assistance_pct");
+      if (doc.prompt_evidence_mode !== undefined) forbidden.push("prompt_evidence_mode");
+      if (doc.prompts !== undefined) forbidden.push("prompts");
+      if (forbidden.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `ai_used=false forbids fields: ${forbidden.join(", ")}`,
+        });
+      }
+    }
+    // Conditional rule: prompt_evidence_mode in {full, hashed} ⇒ prompts present.
+    if (
+      doc.prompt_evidence_mode === "full" ||
+      doc.prompt_evidence_mode === "hashed"
+    ) {
+      if (!doc.prompts || doc.prompts.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `prompt_evidence_mode=${doc.prompt_evidence_mode} requires prompts[]`,
+        });
+      } else {
+        const field = doc.prompt_evidence_mode === "full" ? "text" : "hash";
+        const opposite = doc.prompt_evidence_mode === "full" ? "hash" : "text";
+        for (let i = 0; i < doc.prompts.length; i++) {
+          const p = doc.prompts[i]!;
+          if (p[field as "text" | "hash"] === undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `prompts[${i}] missing required '${field}' (mode=${doc.prompt_evidence_mode})`,
+            });
+          }
+          if (p[opposite as "text" | "hash"] !== undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `prompts[${i}] must not include '${opposite}' (mode=${doc.prompt_evidence_mode})`,
+            });
+          }
+        }
+      }
+    }
+    if (doc.prompt_evidence_mode === "omitted" && doc.prompts !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "prompt_evidence_mode=omitted forbids prompts[]",
+      });
+    }
+    // Conditional rule: roles contains 'other' ⇒ roles_other_text required.
+    if (doc.roles?.includes("other") && !doc.roles_other_text) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "roles contains 'other' but roles_other_text is missing",
+      });
+    }
+  });
+
+export type StudentDisclosure = z.infer<typeof studentDisclosureSchema>;
