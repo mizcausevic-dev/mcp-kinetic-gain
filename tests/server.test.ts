@@ -354,10 +354,138 @@ describe("MCP Tool Cards", () => {
 });
 
 // ----------------------------------------------------------------------------
+// AI Tutor Cards (EdTech extension)
+// ----------------------------------------------------------------------------
+const TUTOR_CARD = {
+  tutor_card_version: "0.1",
+  tutor: {
+    id: "k12-math-tutor",
+    name: "K-12 Math Tutor",
+    version: "1.0.0",
+    provider: "Kinetic Gain Edu",
+    description: "Personal AI math tutor for K-12.",
+  },
+  audience: {
+    age_range_min: 5,
+    age_range_max: 18,
+    grade_range_min: "K",
+    grade_range_max: "12",
+    language_codes: ["en", "es"],
+  },
+  subject_scope: {
+    primary_subjects: ["Math"],
+    topics_included: ["arithmetic", "algebra", "geometry"],
+    topics_excluded: ["calculus"],
+  },
+  pedagogy: {
+    approach: "socratic",
+    homework_policy: "guide_only",
+    assessment_policy: "refuse",
+  },
+  safety: {
+    content_filter_strength: "strict",
+    mandated_reporter_protocol: true,
+    human_in_loop_required: ["abuse_disclosure"],
+  },
+  data_privacy: {
+    ferpa_compliant: true,
+    coppa_compliant: true,
+    gdpr_compliant: true,
+    retention_days: 90,
+    data_sharing_with_parents: "summaries_only",
+    data_sharing_with_school: "summaries_only",
+    third_party_data_sharing: false,
+  },
+};
+
+const COPPA_VIOLATING_TUTOR_CARD = {
+  ...TUTOR_CARD,
+  tutor: { ...TUTOR_CARD.tutor, id: "broken-card" },
+  audience: { ...TUTOR_CARD.audience, age_range_min: 8 },
+  data_privacy: { ...TUTOR_CARD.data_privacy, coppa_compliant: false },
+};
+
+describe("AI Tutor Cards", () => {
+  const json = JSON.stringify(TUTOR_CARD);
+
+  it("well_known_url builds the canonical path", async () => {
+    const out = JSON.parse(
+      await handlers.tutor_card_well_known_url!({
+        origin: "https://edu.example.com",
+        tutor_id: "k12-math-tutor",
+      }),
+    );
+    expect(out.url).toBe("https://edu.example.com/.well-known/tutors/k12-math-tutor.json");
+  });
+
+  it("validate accepts a conforming card", async () => {
+    const out = JSON.parse(await handlers.tutor_card_validate!({ document_json: json }));
+    expect(out.valid).toBe(true);
+    expect(out.coppa_check.ok).toBe(true);
+  });
+
+  it("validate flags the COPPA conditional violation", async () => {
+    const out = JSON.parse(
+      await handlers.tutor_card_validate!({
+        document_json: JSON.stringify(COPPA_VIOLATING_TUTOR_CARD),
+      }),
+    );
+    expect(out.coppa_check.ok).toBe(false);
+    expect(out.coppa_check.reason).toContain("SPEC VIOLATION");
+  });
+
+  it("inspect returns procurement summary", async () => {
+    const out = JSON.parse(await handlers.tutor_card_inspect!({ document_json: json }));
+    expect(out.audience.ages).toBe("5-18");
+    expect(out.pedagogy.homework_policy).toBe("guide_only");
+    expect(out.privacy.ferpa_compliant).toBe(true);
+    expect(out.coppa_check.ok).toBe(true);
+  });
+
+  it("subject_check classifies primary / included / excluded / unknown", async () => {
+    const primary = JSON.parse(
+      await handlers.tutor_card_subject_check!({ document_json: json, query: "math" }),
+    );
+    expect(primary.classification).toBe("primary");
+
+    const included = JSON.parse(
+      await handlers.tutor_card_subject_check!({ document_json: json, query: "algebra" }),
+    );
+    expect(included.classification).toBe("included");
+
+    const excluded = JSON.parse(
+      await handlers.tutor_card_subject_check!({ document_json: json, query: "calculus" }),
+    );
+    expect(excluded.classification).toBe("excluded");
+
+    const unknown = JSON.parse(
+      await handlers.tutor_card_subject_check!({ document_json: json, query: "creative writing" }),
+    );
+    expect(unknown.classification).toBe("unknown");
+  });
+
+  it("coppa_check passes when age_range_min < 13 and coppa_compliant", async () => {
+    const out = JSON.parse(
+      await handlers.tutor_card_coppa_check!({ document_json: json }),
+    );
+    expect(out.ok).toBe(true);
+  });
+
+  it("coppa_check fails when age_range_min < 13 and !coppa_compliant", async () => {
+    const out = JSON.parse(
+      await handlers.tutor_card_coppa_check!({
+        document_json: JSON.stringify(COPPA_VIOLATING_TUTOR_CARD),
+      }),
+    );
+    expect(out.error).toBe("coppa_violation");
+  });
+});
+
+// ----------------------------------------------------------------------------
 // Cross-cutting
 // ----------------------------------------------------------------------------
 describe("Unknown tool", () => {
-  it("server is built and only exposes the 18 declared tools", () => {
-    expect(Object.keys(handlers)).toHaveLength(18);
+  it("server exposes exactly the 24 declared tools (5 specs + EdTech extension)", () => {
+    expect(Object.keys(handlers)).toHaveLength(24);
   });
 });

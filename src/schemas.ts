@@ -257,3 +257,87 @@ export const mcpToolCardSchema = z.object({
     .optional(),
 });
 export type McpToolCard = z.infer<typeof mcpToolCardSchema>;
+
+// ----------------------------------------------------------------------------
+// AI Tutor Card (EdTech extension of the Suite)
+// ----------------------------------------------------------------------------
+export const tutorCardSchema = z
+  .object({
+    tutor_card_version: z.string(),
+    tutor: z.object({
+      id: z.string(),
+      name: z.string(),
+      version: z.string(),
+      provider: z.string(),
+      homepage: z.string().optional(),
+      description: z.string(),
+    }),
+    audience: z.object({
+      age_range_min: z.number().int().min(3).max(99),
+      age_range_max: z.number().int().min(3).max(99),
+      grade_range_min: z.string(),
+      grade_range_max: z.string(),
+      language_codes: z.array(z.string()).min(1),
+    }),
+    subject_scope: z.object({
+      primary_subjects: z.array(z.string()).min(1),
+      topics_included: z.array(z.string()).optional(),
+      topics_excluded: z.array(z.string()).optional(),
+    }),
+    pedagogy: z.object({
+      approach: z.enum(["socratic", "direct_instruction", "scaffolded", "personalized", "mixed"]),
+      homework_policy: z.enum(["complete", "guide_only", "refuse"]),
+      assessment_policy: z.enum(["complete", "guide_only", "refuse"]),
+      supports_visual_explanations: z.boolean().optional(),
+      supports_step_by_step_breakdown: z.boolean().optional(),
+      supports_alternative_explanations: z.boolean().optional(),
+    }),
+    curriculum_alignment: z
+      .array(
+        z.object({
+          framework: z.string(),
+          version: z.string().optional(),
+          coverage_uri: z.string().optional(),
+        }),
+      )
+      .optional(),
+    safety: z.object({
+      content_filter_strength: z.enum(["strict", "moderate", "light"]),
+      mandated_reporter_protocol: z.boolean(),
+      human_in_loop_required: z.array(z.string()),
+      blocks_explicit_content: z.boolean().optional(),
+      blocks_drug_alcohol_content: z.boolean().optional(),
+      blocks_violence_content: z.boolean().optional(),
+      blocks_political_advocacy: z.boolean().optional(),
+    }),
+    data_privacy: z.object({
+      ferpa_compliant: z.boolean(),
+      coppa_compliant: z.boolean(),
+      gdpr_compliant: z.boolean(),
+      retention_days: z.number().int().min(0),
+      data_sharing_with_parents: z.enum(["full_transcript", "summaries_only", "none"]),
+      data_sharing_with_school: z.enum(["full_transcript", "summaries_only", "none"]),
+      third_party_data_sharing: z.boolean(),
+      model_training_consent_required: z.boolean().optional(),
+    }),
+    agent_card_uri: z.string().optional(),
+    evaluations: z
+      .array(
+        z.object({
+          suite: z.string(),
+          result_uri: z.string(),
+          metrics: z.record(z.unknown()).optional(),
+          ran_at: z.string(),
+        }),
+      )
+      .optional(),
+    audit: z
+      .object({
+        audit_log_uri: z.string().optional(),
+        incident_response_uri: z.string().optional(),
+        disclosure_uri: z.string().optional(),
+      })
+      .optional(),
+  })
+  .strict();
+export type TutorCard = z.infer<typeof tutorCardSchema>;
