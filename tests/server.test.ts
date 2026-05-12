@@ -698,10 +698,221 @@ describe("Student AI Disclosure", () => {
 });
 
 // ----------------------------------------------------------------------------
+// Classroom AI AUP (EdTech extension — closes the trio)
+// ----------------------------------------------------------------------------
+const STRICT_K12_AUP = {
+  aup_version: "0.1",
+  policy_id: "test-district-aup",
+  policy_name: "Test District AUP",
+  version: "1.0.0",
+  effective_at: "2020-01-01T00:00:00Z",
+  scope: { type: "district", institution_id: "test-district" },
+  permitted_use: {
+    permitted_roles: ["edit", "cite_check", "translate"],
+    assistance_extent_max: "minor",
+  },
+  prohibited_use: { prohibited_roles: ["draft", "image_generation"] },
+  disclosure_requirements: {
+    required_when: "when_used",
+    required_prompt_evidence_mode: "hashed",
+    signature_required: true,
+    teacher_acknowledgment_required: true,
+    artifact_hash_required: true,
+  },
+  published_by: { name: "Test District" },
+  published_at: "2020-01-01T00:00:00Z",
+};
+
+const PROCTORED_NO_AI_AUP = {
+  aup_version: "0.1",
+  policy_id: "test-proctored-aup",
+  policy_name: "Proctored Exam AUP",
+  version: "1.0.0",
+  effective_at: "2020-01-01T00:00:00Z",
+  scope: { type: "assignment", institution_id: "test", assignment_ids: ["midterm-1"] },
+  permitted_use: { permitted_roles: [], assistance_extent_max: "none" },
+  disclosure_requirements: {
+    required_when: "always",
+    signature_required: true,
+    artifact_hash_required: true,
+  },
+  published_by: { name: "Test Instructor" },
+  published_at: "2020-01-01T00:00:00Z",
+};
+
+const COMPLIANT_DISCLOSURE_FOR_K12 = {
+  ...HASHED_PROMPT_DISCLOSURE,
+  teacher_acknowledged: {
+    acknowledged: true,
+    by: "teacher-x",
+    at: "2026-05-13T08:15:00Z",
+  },
+};
+
+describe("Classroom AI AUP", () => {
+  it("validate accepts a well-formed district AUP", async () => {
+    const out = JSON.parse(
+      await handlers.aup_validate!({ document_json: JSON.stringify(STRICT_K12_AUP) }),
+    );
+    expect(out.valid).toBe(true);
+    expect(out.policy_id).toBe("test-district-aup");
+    expect(out.scope_type).toBe("district");
+    expect(out.assistance_extent_max).toBe("minor");
+  });
+
+  it("validate rejects assistance_extent_max=none with non-empty permitted_roles", async () => {
+    const bad = {
+      ...PROCTORED_NO_AI_AUP,
+      permitted_use: { permitted_roles: ["edit"], assistance_extent_max: "none" },
+    };
+    const out = JSON.parse(
+      await handlers.aup_validate!({ document_json: JSON.stringify(bad) }),
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/forbids any permitted_roles/);
+  });
+
+  it("validate rejects course scope without course_ids", async () => {
+    const bad = {
+      ...STRICT_K12_AUP,
+      scope: { type: "course", institution_id: "test" },
+    };
+    const out = JSON.parse(
+      await handlers.aup_validate!({ document_json: JSON.stringify(bad) }),
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/course_ids/);
+  });
+
+  it("validate rejects role disjointness violation", async () => {
+    const bad = {
+      ...STRICT_K12_AUP,
+      prohibited_use: { prohibited_roles: ["edit"] },
+    };
+    const out = JSON.parse(
+      await handlers.aup_validate!({ document_json: JSON.stringify(bad) }),
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/both permitted and prohibited/);
+  });
+
+  it("well_known_url returns canonical /.well-known/ai-aup.json", async () => {
+    const out = JSON.parse(
+      await handlers.aup_well_known_url!({ origin: "https://example.edu" }),
+    );
+    expect(out.url).toBe("https://example.edu/.well-known/ai-aup.json");
+  });
+
+  it("inspect returns scope, permitted-role count, and vendor posture", async () => {
+    const out = JSON.parse(
+      await handlers.aup_inspect!({ document_json: JSON.stringify(STRICT_K12_AUP) }),
+    );
+    expect(out.scope.type).toBe("district");
+    expect(out.permitted_use.role_count).toBe(3);
+    expect(out.disclosure_requirements.required_when).toBe("when_used");
+  });
+
+  it("check_compliance allows a fully compliant disclosure", async () => {
+    const out = JSON.parse(
+      await handlers.aup_check_compliance!({
+        aup_json: JSON.stringify(STRICT_K12_AUP),
+        disclosure_json: JSON.stringify(COMPLIANT_DISCLOSURE_FOR_K12),
+      }),
+    );
+    expect(out.allowed).toBe(true);
+    expect(out.violations).toEqual([]);
+  });
+
+  it("check_compliance flags missing teacher acknowledgment", async () => {
+    const out = JSON.parse(
+      await handlers.aup_check_compliance!({
+        aup_json: JSON.stringify(STRICT_K12_AUP),
+        disclosure_json: JSON.stringify(HASHED_PROMPT_DISCLOSURE),
+      }),
+    );
+    expect(out.allowed).toBe(false);
+    expect(out.violations.some((v: { code: string }) => v.code === "teacher_acknowledgment_missing")).toBe(true);
+  });
+
+  it("check_compliance flags wrong prompt evidence mode", async () => {
+    const out = JSON.parse(
+      await handlers.aup_check_compliance!({
+        aup_json: JSON.stringify(STRICT_K12_AUP),
+        disclosure_json: JSON.stringify(FULL_PROMPT_DISCLOSURE),
+      }),
+    );
+    expect(out.allowed).toBe(false);
+    expect(
+      out.violations.some((v: { code: string }) => v.code === "wrong_prompt_evidence_mode"),
+    ).toBe(true);
+  });
+
+  it("check_compliance flags disallowed role (draft) used under K-12 AUP", async () => {
+    const bad = {
+      ...COMPLIANT_DISCLOSURE_FOR_K12,
+      roles: ["draft"],
+      assistance_extent: "substantial",
+    };
+    const out = JSON.parse(
+      await handlers.aup_check_compliance!({
+        aup_json: JSON.stringify(STRICT_K12_AUP),
+        disclosure_json: JSON.stringify(bad),
+      }),
+    );
+    expect(out.allowed).toBe(false);
+    const codes = out.violations.map((v: { code: string }) => v.code);
+    expect(codes).toContain("roles_not_permitted");
+    expect(codes).toContain("roles_prohibited");
+    expect(codes).toContain("assistance_extent_exceeded");
+  });
+
+  it("check_compliance flags any AI use under a no-AI proctored AUP", async () => {
+    const out = JSON.parse(
+      await handlers.aup_check_compliance!({
+        aup_json: JSON.stringify(PROCTORED_NO_AI_AUP),
+        disclosure_json: JSON.stringify(HASHED_PROMPT_DISCLOSURE),
+      }),
+    );
+    expect(out.allowed).toBe(false);
+    expect(out.violations.some((v: { code: string }) => v.code === "no_ai_permitted")).toBe(true);
+  });
+
+  it("check_compliance allows a no-AI disclosure under a proctored AUP", async () => {
+    const noAi = {
+      ...NO_AI_DISCLOSURE,
+      teacher_acknowledged: { acknowledged: true, by: "teacher-x", at: "2026-03-11T08:00:00Z" },
+    };
+    const out = JSON.parse(
+      await handlers.aup_check_compliance!({
+        aup_json: JSON.stringify({
+          ...PROCTORED_NO_AI_AUP,
+          disclosure_requirements: {
+            ...PROCTORED_NO_AI_AUP.disclosure_requirements,
+            teacher_acknowledgment_required: true,
+          },
+        }),
+        disclosure_json: JSON.stringify(noAi),
+      }),
+    );
+    expect(out.allowed).toBe(true);
+  });
+
+  it("check_compliance returns disclosure_invalid for malformed disclosure JSON", async () => {
+    const out = JSON.parse(
+      await handlers.aup_check_compliance!({
+        aup_json: JSON.stringify(STRICT_K12_AUP),
+        disclosure_json: JSON.stringify({ disclosure_version: "0.1" }),
+      }),
+    );
+    expect(out.error).toBe("disclosure_invalid");
+  });
+});
+
+// ----------------------------------------------------------------------------
 // Cross-cutting
 // ----------------------------------------------------------------------------
 describe("Unknown tool", () => {
-  it("server exposes exactly the 29 declared tools (5 core specs + 2 EdTech extensions)", () => {
-    expect(Object.keys(handlers)).toHaveLength(29);
+  it("server exposes exactly the 34 declared tools (5 core specs + 3 EdTech extensions)", () => {
+    expect(Object.keys(handlers)).toHaveLength(34);
   });
 });

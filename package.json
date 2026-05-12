@@ -1,7 +1,7 @@
 {
   "name": "@mizcausevic-dev/mcp-kinetic-gain",
-  "version": "0.3.0",
-  "description": "MCP server exposing all seven Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 29 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, and Student AI Disclosure (EdTech extensions).",
+  "version": "0.4.0",
+  "description": "MCP server exposing all eight Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 34 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, and Classroom AI AUP (EdTech extensions). The aup_check_compliance tool joins an AUP with a Student AI Disclosure and returns a single allow/deny decision with structured violations.",
   "type": "module",
   "bin": {
     "mcp-kinetic-gain": "./dist/server.js"
@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js"
   },
-  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "kinetic-gain-protocol-suite", "claude", "edtech"],
+  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "classroom-ai-aup", "kinetic-gain-protocol-suite", "claude", "edtech", "ferpa", "coppa"],
   "author": "Miz Causevic",
   "license": "AGPL-3.0",
   "repository": {

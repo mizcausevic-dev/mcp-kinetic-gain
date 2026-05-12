@@ -1,6 +1,6 @@
 /**
  * MCP tool descriptors for every spec in the Kinetic Gain Protocol Suite.
- * 29 tools total across 7 specs:
+ * 34 tools total across 8 specs:
  *   AEO Protocol            (4)
  *   Prompt Provenance       (3)
  *   Agent Cards             (4)
@@ -8,6 +8,7 @@
  *   MCP Tool Cards          (4)
  *   AI Tutor Cards          (6) — EdTech extension
  *   Student AI Disclosure   (5) — EdTech extension
+ *   Classroom AI AUP        (5) — EdTech extension (closes the trio)
  */
 export const toolDescriptors = [
   // --------------------------------------------------------------------------
@@ -366,12 +367,72 @@ export const toolDescriptors = [
   },
   {
     name: "disclosure_aup_check",
-    description: "Surface the disclosure's policy posture: whether an aup_uri is referenced and what the student declared. Status is one of: declared_compliant, declared_non_compliant, aup_referenced_but_unclaimed, no_aup_reference. v0.3 reports declared posture only; future versions will fetch and cross-check against the Classroom AI AUP spec.",
+    description: "Surface the disclosure's policy posture: whether an aup_uri is referenced and what the student declared. Status is one of: declared_compliant, declared_non_compliant, aup_referenced_but_unclaimed, no_aup_reference. Reports declared posture only; for the actual three-way join use aup_check_compliance.",
     inputSchema: {
       type: "object",
       required: ["document_json"],
       additionalProperties: false,
       properties: { document_json: { type: "string" } },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // Classroom AI AUP (EdTech extension — closes the trio)
+  // --------------------------------------------------------------------------
+  {
+    name: "aup_well_known_url",
+    description: "Compute the canonical Classroom AI AUP well-known URL: /.well-known/ai-aup.json.",
+    inputSchema: {
+      type: "object",
+      required: ["origin"],
+      additionalProperties: false,
+      properties: { origin: { type: "string", format: "uri" } },
+    },
+  },
+  {
+    name: "aup_fetch",
+    description: "Fetch a Classroom AI AUP from a URL. Returns the parsed, schema-validated JSON document.",
+    inputSchema: {
+      type: "object",
+      required: ["url"],
+      additionalProperties: false,
+      properties: { url: { type: "string", format: "uri" } },
+    },
+  },
+  {
+    name: "aup_validate",
+    description: "Validate a Classroom AI AUP JSON document against the v0.1 schema. Enforces conditional rules: course scope requires non-empty course_ids; assignment scope requires non-empty assignment_ids; assistance_extent_max=none forbids any permitted_roles; expires_at must follow effective_at; roles cannot be both permitted and prohibited.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string" } },
+    },
+  },
+  {
+    name: "aup_inspect",
+    description: "Structured summary of a Classroom AI AUP: policy identity, scope, permitted-use counts, prohibited-use counts, disclosure requirements, supervision level, vendor requirements posture, parent-consent gating.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "aup_check_compliance",
+    description: "HEADLINE TOOL — joins an AUP with a Student AI Disclosure and decides whether the submission complies with the operative policy. Eight gates: policy effective window, signature, artifact_hash, teacher acknowledgment, prompt evidence mode, permitted/prohibited roles, assistance-extent ceiling, and assistance_extent_max=none vs ai_used=true. Returns { allowed, policy_id, disclosure_id, violations[] } with one entry per failed gate. The three-document join (Tutor Card + AUP + Disclosure) reduces to a single allow/deny call.",
+    inputSchema: {
+      type: "object",
+      required: ["disclosure_json"],
+      additionalProperties: false,
+      properties: {
+        aup_json: { type: "string", description: "AUP as inline JSON." },
+        aup_url: { type: "string", format: "uri", description: "AUP URL — server fetches it." },
+        disclosure_json: { type: "string", description: "Student AI Disclosure as inline JSON." },
+      },
     },
   },
 ];

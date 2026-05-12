@@ -521,3 +521,166 @@ export const studentDisclosureSchema = z
   });
 
 export type StudentDisclosure = z.infer<typeof studentDisclosureSchema>;
+
+// ----------------------------------------------------------------------------
+// Classroom AI AUP (EdTech extension of the Suite)
+// ----------------------------------------------------------------------------
+const ROLE_ENUM = [
+  "brainstorm",
+  "outline",
+  "draft",
+  "edit",
+  "translate",
+  "cite_check",
+  "code_completion",
+  "code_review",
+  "research_synthesis",
+  "tutor_dialog",
+  "image_generation",
+  "data_analysis",
+  "other",
+] as const;
+
+export const classroomAupSchema = z
+  .object({
+    aup_version: z.string(),
+    policy_id: z.string().regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/),
+    policy_name: z.string().min(1),
+    version: z.string().regex(/^\d+\.\d+\.\d+(?:[-+].+)?$/),
+    effective_at: z.string(),
+    expires_at: z.string().optional(),
+    replaces: z.string().optional(),
+    scope: z.object({
+      type: z.enum(["district", "school", "course", "assignment"]),
+      institution_id: z.string().min(1),
+      grade_bands: z
+        .array(z.enum(["K-5", "6-8", "9-12", "undergrad", "grad", "adult-ed"]))
+        .optional(),
+      course_ids: z.array(z.string().min(1)).optional(),
+      assignment_ids: z.array(z.string().min(1)).optional(),
+      parent_policy_uri: z.string().optional(),
+    }),
+    permitted_use: z.object({
+      permitted_roles: z.array(z.enum(ROLE_ENUM)),
+      permitted_tool_categories: z
+        .array(
+          z.enum([
+            "text_chat",
+            "tutoring",
+            "code_assistant",
+            "image_generation",
+            "translation",
+            "research_synthesis",
+            "data_analysis",
+            "general",
+          ]),
+        )
+        .optional(),
+      permitted_tools: z
+        .array(
+          z.object({
+            name: z.string().min(1),
+            agent_card_uri: z.string().optional(),
+            tutor_card_uri: z.string().optional(),
+            notes: z.string().min(1).optional(),
+          }),
+        )
+        .optional(),
+      assistance_extent_max: z.enum(["none", "minor", "substantial", "primary_author"]),
+    }),
+    prohibited_use: z
+      .object({
+        prohibited_roles: z.array(z.enum(ROLE_ENUM)).optional(),
+        prohibited_uses: z.array(z.string().min(1)).optional(),
+      })
+      .optional(),
+    disclosure_requirements: z.object({
+      required_when: z.enum(["always", "when_used", "never"]),
+      required_prompt_evidence_mode: z
+        .enum(["full", "hashed", "omitted", "any"])
+        .optional(),
+      signature_required: z.boolean(),
+      teacher_acknowledgment_required: z.boolean().optional(),
+      artifact_hash_required: z.boolean().optional(),
+    }),
+    supervision: z
+      .object({
+        level: z.enum(["unsupervised", "teacher_visible", "teacher_approved", "proctored"]),
+        human_in_loop_categories: z.array(z.string().min(1)).optional(),
+      })
+      .optional(),
+    vendor_requirements: z
+      .object({
+        requires_tutor_card: z.boolean().optional(),
+        requires_agent_card: z.boolean().optional(),
+        required_compliance: z
+          .array(z.enum(["ferpa", "coppa", "gdpr", "state-specific"]))
+          .optional(),
+        state_specific_laws: z.array(z.string().min(1)).optional(),
+        required_content_filter_strength_min: z.enum(["strict", "moderate", "light"]).optional(),
+        requires_mandated_reporter_protocol: z.boolean().optional(),
+        requires_human_in_loop_for: z.array(z.string().min(1)).optional(),
+        retention_days_max: z.number().int().min(0).optional(),
+        prohibits_third_party_data_sharing: z.boolean().optional(),
+        prohibits_model_training_on_student_data: z.boolean().optional(),
+      })
+      .optional(),
+    parent_notification: z
+      .object({
+        notification_level: z.enum(["none", "at_enrollment", "per_assignment", "per_use"]),
+        parent_consent_required: z.boolean(),
+        consent_age_threshold: z.number().int().min(0).max(25).optional(),
+      })
+      .optional(),
+    enforcement: z
+      .object({
+        violation_response: z.array(z.string().min(1)).optional(),
+        appeals_process_uri: z.string().optional(),
+      })
+      .optional(),
+    published_by: z.object({
+      name: z.string().min(1),
+      role: z.string().min(1).optional(),
+      contact_uri: z.string().optional(),
+    }),
+    published_at: z.string(),
+    audit_log_uri: z.string().optional(),
+  })
+  .strict()
+  .superRefine((doc, ctx) => {
+    // Scope completeness
+    if (doc.scope.type === "course" && (!doc.scope.course_ids || doc.scope.course_ids.length === 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "scope.type=course requires non-empty course_ids" });
+    }
+    if (doc.scope.type === "assignment" && (!doc.scope.assignment_ids || doc.scope.assignment_ids.length === 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "scope.type=assignment requires non-empty assignment_ids" });
+    }
+    // Extent vs. roles
+    if (doc.permitted_use.assistance_extent_max === "none" && doc.permitted_use.permitted_roles.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "assistance_extent_max=none forbids any permitted_roles (must be empty)",
+      });
+    }
+    // Effective window
+    if (doc.expires_at && doc.expires_at <= doc.effective_at) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expires_at must be strictly after effective_at",
+      });
+    }
+    // Role disjointness
+    if (doc.prohibited_use?.prohibited_roles) {
+      const overlap = doc.prohibited_use.prohibited_roles.filter((r) =>
+        doc.permitted_use.permitted_roles.includes(r),
+      );
+      if (overlap.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Roles cannot be both permitted and prohibited: ${overlap.join(", ")}`,
+        });
+      }
+    }
+  });
+
+export type ClassroomAup = z.infer<typeof classroomAupSchema>;
