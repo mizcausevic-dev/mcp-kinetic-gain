@@ -1,7 +1,7 @@
 {
   "name": "@mizcausevic-dev/mcp-kinetic-gain",
-  "version": "0.4.0",
-  "description": "MCP server exposing all eight Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 34 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, and Classroom AI AUP (EdTech extensions). The aup_check_compliance tool joins an AUP with a Student AI Disclosure and returns a single allow/deny decision with structured violations.",
+  "version": "0.5.0",
+  "description": "MCP server exposing all ten Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 43 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), and AI Incident Card (cross-cutting). Headline tools: aup_check_compliance joins an AUP with a Student AI Disclosure into a single allow/deny; incident_index_fetch summarizes a vendor's full incident history in one call.",
   "type": "module",
   "bin": {
     "mcp-kinetic-gain": "./dist/server.js"
@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js"
   },
-  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "classroom-ai-aup", "kinetic-gain-protocol-suite", "claude", "edtech", "ferpa", "coppa"],
+  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "classroom-ai-aup", "clinical-ai", "ai-incident-card", "kinetic-gain-protocol-suite", "claude", "edtech", "healthtech", "ferpa", "coppa", "hipaa", "fda", "samd"],
   "author": "Miz Causevic",
   "license": "AGPL-3.0",
   "repository": {

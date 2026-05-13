@@ -909,10 +909,244 @@ describe("Classroom AI AUP", () => {
 });
 
 // ----------------------------------------------------------------------------
+// Clinical AI Disclosure (HealthTech extension)
+// ----------------------------------------------------------------------------
+const SEPSIS_CARD = {
+  clinical_ai_card_version: "0.1",
+  system: {
+    id: "kineticgain-sepsis-ews",
+    name: "Kinetic Gain Sepsis EWS",
+    version: "2.3.1",
+    provider: "Kinetic Gain Health",
+    description: "Continuous sepsis EWS.",
+  },
+  clinical_context: {
+    indication: "Early detection of adult inpatient sepsis.",
+    care_settings: ["inpatient", "icu"],
+    patient_population: { age_range_min: 18, age_range_max: 89 },
+    intended_use: "CDS for adult inpatient providers.",
+    off_label_uses_prohibited: true,
+  },
+  regulatory: {
+    fda_status: "510k_cleared",
+    fda_clearance_number: "K233456",
+    fda_clearance_uri: "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfpmn/pmn.cfm?ID=K233456",
+    is_medical_device: true,
+    is_clinical_decision_support: true,
+    is_software_as_medical_device: true,
+    samd_class: "II",
+    samd_classification_rationale: "Serious situation, drive clinical management.",
+  },
+  clinical_role: {
+    decision_support_level: "advisory",
+    clinician_override_required: true,
+    patient_facing_only: false,
+    transparency_to_patient_required: true,
+  },
+  evidence: {
+    validation_studies: [
+      { title: "Multi-site validation", uri: "https://x/study.pdf", population_size: 48217,
+        primary_outcome: "Sepsis detection ≥6h before MEWS",
+        results_summary: "Sens 0.84, Spec 0.78, AUC 0.89", peer_reviewed: true },
+    ],
+    training_data_sources: ["MIMIC-IV", "Internal N=287k"],
+    bias_audit_uri: "https://x/bias-audit.pdf",
+    performance_metrics: { measurement_population: "Adult inpatient", sensitivity: 0.84, specificity: 0.78, auc: 0.89 },
+  },
+  patient_data: {
+    phi_processed: true, hipaa_compliant: true, baa_required: true,
+    retention_days: 365, patient_consent_required: false, third_party_data_sharing: false,
+  },
+  safety: {
+    human_in_loop_required_for: ["pediatric-routed"],
+    mandatory_reporting_categories: ["adverse-drug-event"],
+  },
+  ehr_integration: { fhir_version: "R4", supports_smart_on_fhir: true },
+};
+
+describe("Clinical AI Disclosure", () => {
+  it("validate accepts a 510(k)-cleared SaMD class II card", async () => {
+    const out = JSON.parse(await handlers.clinical_ai_validate!({ document_json: JSON.stringify(SEPSIS_CARD) }));
+    expect(out.valid).toBe(true);
+    expect(out.system_id).toBe("kineticgain-sepsis-ews");
+    expect(out.fda_status).toBe("510k_cleared");
+    expect(out.samd_class).toBe("II");
+    expect(out.bias_audited).toBe(true);
+  });
+
+  it("validate rejects autonomous decision support without is_medical_device", async () => {
+    const bad = JSON.parse(JSON.stringify(SEPSIS_CARD));
+    bad.clinical_role.decision_support_level = "autonomous";
+    bad.regulatory.is_medical_device = false;
+    const out = JSON.parse(await handlers.clinical_ai_validate!({ document_json: JSON.stringify(bad) }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/autonomous.*is_medical_device/i);
+  });
+
+  it("validate rejects SaMD class II+ without bias_audit_uri", async () => {
+    const bad = JSON.parse(JSON.stringify(SEPSIS_CARD));
+    delete bad.evidence.bias_audit_uri;
+    const out = JSON.parse(await handlers.clinical_ai_validate!({ document_json: JSON.stringify(bad) }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/bias_audit_uri/);
+  });
+
+  it("validate rejects 510k-cleared without clearance number", async () => {
+    const bad = JSON.parse(JSON.stringify(SEPSIS_CARD));
+    delete bad.regulatory.fda_clearance_number;
+    const out = JSON.parse(await handlers.clinical_ai_validate!({ document_json: JSON.stringify(bad) }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/fda_clearance_number/);
+  });
+
+  it("well_known_url computes canonical path", async () => {
+    const out = JSON.parse(await handlers.clinical_ai_well_known_url!({
+      origin: "https://health.kineticgain.com",
+      system_id: "kineticgain-sepsis-ews",
+    }));
+    expect(out.url).toBe("https://health.kineticgain.com/.well-known/clinical-ai/kineticgain-sepsis-ews.json");
+  });
+
+  it("inspect returns clinical-context + evidence summary", async () => {
+    const out = JSON.parse(await handlers.clinical_ai_inspect!({ document_json: JSON.stringify(SEPSIS_CARD) }));
+    expect(out.regulatory.fda_status).toBe("510k_cleared");
+    expect(out.clinical_role.decision_support_level).toBe("advisory");
+    expect(out.evidence.validation_study_count).toBe(1);
+    expect(out.evidence.bias_audit_uri).toBeTruthy();
+    expect(out.patient_data.phi_processed).toBe(true);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// AI Incident Card (cross-cutting)
+// ----------------------------------------------------------------------------
+const MR_INCIDENT = {
+  incident_card_version: "0.1",
+  incident: {
+    id: "INC-2026-04-22-kineticgain-001",
+    title: "K-12 tutor failed to escalate self-harm disclosure",
+    severity: "critical",
+    categories: ["mandated_reporter_failure"],
+    discovered_at: "2026-04-22T14:30:00Z",
+    disclosed_at: "2026-04-23T09:00:00Z",
+    resolved_at: "2026-04-25T16:00:00Z",
+    status: "resolved",
+  },
+  affected: {
+    vendor: "Kinetic Gain Edu",
+    products: ["K-12 Math Tutor"],
+    versions: ["1.4.0"],
+    tutor_card_uris: ["https://edu.kineticgain.com/.well-known/tutors/k12-math-tutor.json"],
+  },
+  summary: "Tutor failed to escalate self-harm disclosure embedded in a word problem.",
+  root_cause: { category: "refusal_taxonomy_gap", description: "Classifier short-circuited on math classification." },
+  harm: { severity_justification: "K-12 mandated-reporter failure.", manifested: true },
+  mitigation: {
+    actions_taken: ["Added parallel classifier.", "Added regression corpus."],
+    permanent_fix: true,
+    rollout_status: "deployed",
+  },
+  regulatory: {
+    reported_to: ["ferpa"],
+    reporting_deadline_met: true,
+    regulatory_filing_uris: ["https://edu.kineticgain.com/regulatory/ferpa.pdf"],
+  },
+  published_by: { name: "Kinetic Gain Edu", role: "vendor" },
+  published_at: "2026-04-23T09:00:00Z",
+  last_updated_at: "2026-04-26T16:30:00Z",
+};
+
+describe("AI Incident Card", () => {
+  it("validate accepts a critical-severity mandated-reporter incident", async () => {
+    const out = JSON.parse(await handlers.incident_validate!({ document_json: JSON.stringify(MR_INCIDENT) }));
+    expect(out.valid).toBe(true);
+    expect(out.severity).toBe("critical");
+    expect(out.status).toBe("resolved");
+    expect(out.permanent_fix).toBe(true);
+  });
+
+  it("validate rejects status=resolved without resolved_at", async () => {
+    const bad = JSON.parse(JSON.stringify(MR_INCIDENT));
+    delete bad.incident.resolved_at;
+    const out = JSON.parse(await handlers.incident_validate!({ document_json: JSON.stringify(bad) }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/resolved_at/);
+  });
+
+  it("validate rejects regulatory.reported_to without filing URIs", async () => {
+    const bad = JSON.parse(JSON.stringify(MR_INCIDENT));
+    delete bad.regulatory.regulatory_filing_uris;
+    const out = JSON.parse(await handlers.incident_validate!({ document_json: JSON.stringify(bad) }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/regulatory_filing_uris/);
+  });
+
+  it("validate rejects status=withdrawn without withdrawal block", async () => {
+    const bad = JSON.parse(JSON.stringify(MR_INCIDENT));
+    bad.incident.status = "withdrawn";
+    delete bad.incident.resolved_at;
+    const out = JSON.parse(await handlers.incident_validate!({ document_json: JSON.stringify(bad) }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/withdrawal/i);
+  });
+
+  it("well_known_url computes canonical path", async () => {
+    const out = JSON.parse(await handlers.incident_well_known_url!({
+      origin: "https://edu.kineticgain.com",
+      incident_id: "INC-2026-04-22-kineticgain-001",
+    }));
+    expect(out.url).toBe("https://edu.kineticgain.com/.well-known/ai-incidents/INC-2026-04-22-kineticgain-001.json");
+  });
+
+  it("inspect returns affected vendor + categories + cross-spec ref counts", async () => {
+    const out = JSON.parse(await handlers.incident_inspect!({ document_json: JSON.stringify(MR_INCIDENT) }));
+    expect(out.affected.vendor).toBe("Kinetic Gain Edu");
+    expect(out.affected.tutor_card_count).toBe(1);
+    expect(out.affected.agent_card_count).toBe(0);
+    expect(out.incident.severity).toBe("critical");
+  });
+
+  it("index_fetch summary correctly parses an index served as an HTTP response", async () => {
+    // Spin up a tiny local server that returns a synthetic index.
+    const { createServer } = await import("node:http");
+    const indexJson = JSON.stringify([
+      { id: "INC-A", severity: "critical", status: "resolved", disclosed_at: "2026-04-23T09:00:00Z" },
+      { id: "INC-B", severity: "high",     status: "mitigated", disclosed_at: "2026-04-15T12:00:00Z" },
+      { id: "INC-C", severity: "critical", status: "active",    disclosed_at: "2026-05-01T08:00:00Z" },
+    ]);
+    const server = createServer((req, res) => {
+      if (req.url === "/.well-known/ai-incidents.json") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(indexJson);
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+    try {
+      const out = JSON.parse(await handlers.incident_index_fetch!({ origin: `http://127.0.0.1:${port}` }));
+      expect(out.total).toBe(3);
+      expect(out.by_severity.critical).toBe(2);
+      expect(out.by_severity.high).toBe(1);
+      expect(out.by_status.resolved).toBe(1);
+      expect(out.by_status.active).toBe(1);
+      // Sorted descending by disclosed_at — newest first
+      expect(out.incidents_sorted_by_disclosed_at_desc[0].id).toBe("INC-C");
+      expect(out.incidents_sorted_by_disclosed_at_desc[2].id).toBe("INC-B");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+// ----------------------------------------------------------------------------
 // Cross-cutting
 // ----------------------------------------------------------------------------
 describe("Unknown tool", () => {
-  it("server exposes exactly the 34 declared tools (5 core specs + 3 EdTech extensions)", () => {
-    expect(Object.keys(handlers)).toHaveLength(34);
+  it("server exposes exactly the 43 declared tools (10 specs total)", () => {
+    expect(Object.keys(handlers)).toHaveLength(43);
   });
 });

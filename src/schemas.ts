@@ -684,3 +684,335 @@ export const classroomAupSchema = z
   });
 
 export type ClassroomAup = z.infer<typeof classroomAupSchema>;
+
+// ----------------------------------------------------------------------------
+// Clinical AI Disclosure (HealthTech extension)
+// ----------------------------------------------------------------------------
+export const clinicalAiCardSchema = z
+  .object({
+    clinical_ai_card_version: z.string(),
+    system: z.object({
+      id: z.string(),
+      name: z.string(),
+      version: z.string(),
+      provider: z.string(),
+      homepage: z.string().optional(),
+      description: z.string(),
+    }),
+    clinical_context: z.object({
+      indication: z.string(),
+      care_settings: z.array(
+        z.enum([
+          "inpatient", "outpatient", "icu", "ed", "home", "telehealth",
+          "research", "pharmacy", "radiology", "pathology",
+        ]),
+      ).min(1),
+      patient_population: z.object({
+        age_range_min: z.number().int().min(0),
+        age_range_max: z.number().int().max(130),
+        exclusions: z.array(z.string()).optional(),
+      }),
+      intended_use: z.string(),
+      off_label_uses_prohibited: z.boolean(),
+    }),
+    regulatory: z.object({
+      fda_status: z.enum([
+        "510k_cleared", "de_novo", "pma", "enforcement_discretion",
+        "research_use_only", "not_applicable",
+      ]),
+      fda_clearance_number: z.string().optional(),
+      fda_clearance_uri: z.string().optional(),
+      iso_certifications: z.array(z.string()).optional(),
+      is_medical_device: z.boolean(),
+      is_clinical_decision_support: z.boolean(),
+      is_software_as_medical_device: z.boolean(),
+      samd_class: z.enum(["I", "II", "III", "IV"]).optional(),
+      samd_classification_rationale: z.string().optional(),
+      regional_authorizations: z.array(z.object({
+        region: z.string(),
+        status: z.string(),
+        identifier: z.string().optional(),
+        uri: z.string().optional(),
+      })).optional(),
+      notes: z.string().optional(),
+    }),
+    clinical_role: z.object({
+      decision_support_level: z.enum(["informational", "advisory", "autonomous"]),
+      clinician_override_required: z.boolean(),
+      patient_facing_only: z.boolean(),
+      transparency_to_patient_required: z.boolean(),
+      pre_authorization_use: z.boolean().optional(),
+    }),
+    evidence: z.object({
+      validation_studies: z.array(z.object({
+        title: z.string(),
+        uri: z.string(),
+        population_size: z.number().int().min(1),
+        primary_outcome: z.string(),
+        results_summary: z.string(),
+        peer_reviewed: z.boolean(),
+        published_at: z.string().optional(),
+      })).min(1),
+      training_data_sources: z.array(z.string()).min(1),
+      bias_audit_uri: z.string().optional(),
+      performance_metrics: z.object({
+        measurement_population: z.string(),
+        sensitivity: z.number().min(0).max(1).optional(),
+        specificity: z.number().min(0).max(1).optional(),
+        auc: z.number().min(0).max(1).optional(),
+        accuracy: z.number().min(0).max(1).optional(),
+        false_positive_rate: z.number().min(0).max(1).optional(),
+        false_negative_rate: z.number().min(0).max(1).optional(),
+        precision: z.number().min(0).max(1).optional(),
+        recall: z.number().min(0).max(1).optional(),
+        f1: z.number().min(0).max(1).optional(),
+        ppv: z.number().min(0).max(1).optional(),
+        npv: z.number().min(0).max(1).optional(),
+      }),
+    }),
+    patient_data: z.object({
+      phi_processed: z.boolean(),
+      hipaa_compliant: z.boolean().optional(),
+      baa_required: z.boolean().optional(),
+      de_identification_method: z.enum([
+        "safe-harbor", "expert-determination", "none", "not-applicable",
+      ]).optional(),
+      retention_days: z.number().int().min(0),
+      patient_consent_required: z.boolean(),
+      consent_flow_uri: z.string().optional(),
+      third_party_data_sharing: z.boolean(),
+      model_training_consent_required: z.boolean().optional(),
+    }),
+    safety: z.object({
+      human_in_loop_required_for: z.array(z.string()),
+      escalation_protocols: z.array(z.string()).optional(),
+      mandatory_reporting_categories: z.array(z.string()),
+      blocks_diagnostic_claims: z.boolean().optional(),
+      treatment_recommendation_disclaimer_required: z.boolean().optional(),
+    }),
+    ehr_integration: z.object({
+      fhir_version: z.enum(["R4", "R5", "STU3", "DSTU2"]).optional(),
+      supports_smart_on_fhir: z.boolean().optional(),
+      supports_cds_hooks: z.boolean().optional(),
+      ehr_vendors_supported: z.array(z.string()).optional(),
+    }).optional(),
+    agent_card_uri: z.string().optional(),
+    evaluations: z.array(z.object({
+      suite: z.string(),
+      result_uri: z.string(),
+      metrics: z.record(z.unknown()).optional(),
+      ran_at: z.string(),
+      accreditation_body: z.string().optional(),
+    })).optional(),
+    audit: z.object({
+      audit_log_uri: z.string().optional(),
+      incident_response_uri: z.string().optional(),
+      incident_card_index_uri: z.string().optional(),
+      disclosure_uri: z.string().optional(),
+    }).optional(),
+  })
+  .strict()
+  .superRefine((doc, ctx) => {
+    // Headline rule: autonomy ⇔ medical device
+    if (doc.clinical_role.decision_support_level === "autonomous" && !doc.regulatory.is_medical_device) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "SPEC RULE: decision_support_level=autonomous requires is_medical_device=true (FDA position)",
+      });
+    }
+    // SaMD completeness
+    if (doc.regulatory.is_software_as_medical_device) {
+      if (!doc.regulatory.samd_class || !doc.regulatory.samd_classification_rationale) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "SaMD requires both samd_class and samd_classification_rationale",
+        });
+      }
+    }
+    // FDA clearance documentation
+    if (["510k_cleared", "de_novo", "pma"].includes(doc.regulatory.fda_status)) {
+      if (!doc.regulatory.fda_clearance_number || !doc.regulatory.fda_clearance_uri) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `fda_status=${doc.regulatory.fda_status} requires fda_clearance_number + fda_clearance_uri`,
+        });
+      }
+    }
+    // PHI gating
+    if (doc.patient_data.phi_processed) {
+      if (doc.patient_data.hipaa_compliant === undefined || doc.patient_data.baa_required === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "phi_processed=true requires explicit hipaa_compliant and baa_required",
+        });
+      }
+    }
+    // Bias audit triggers
+    const triggers: string[] = [];
+    if (doc.regulatory.samd_class && ["II", "III", "IV"].includes(doc.regulatory.samd_class)) {
+      triggers.push(`samd_class=${doc.regulatory.samd_class}`);
+    }
+    if (doc.clinical_role.decision_support_level === "autonomous") triggers.push("decision_support_level=autonomous");
+    if (doc.clinical_role.pre_authorization_use) triggers.push("pre_authorization_use=true");
+    if (triggers.length > 0 && !doc.evidence.bias_audit_uri) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `bias_audit_uri is required when: ${triggers.join(", ")}`,
+      });
+    }
+  });
+
+export type ClinicalAiCard = z.infer<typeof clinicalAiCardSchema>;
+
+// ----------------------------------------------------------------------------
+// AI Incident Card (cross-cutting)
+// ----------------------------------------------------------------------------
+export const aiIncidentCardSchema = z
+  .object({
+    incident_card_version: z.string(),
+    incident: z.object({
+      id: z.string(),
+      title: z.string(),
+      severity: z.enum(["low", "medium", "high", "critical"]),
+      categories: z.array(z.enum([
+        "misinformation", "pii_leak", "bias", "copyright_violation",
+        "mandated_reporter_failure", "prompt_injection_success", "tool_abuse",
+        "jailbreak_success", "hallucination_with_consequences",
+        "refusal_taxonomy_violation", "content_filter_failure",
+        "availability_outage", "tampering", "other",
+      ])).min(1),
+      discovered_at: z.string(),
+      occurred_at: z.string().optional(),
+      disclosed_at: z.string(),
+      resolved_at: z.string().optional(),
+      status: z.enum(["active", "mitigated", "resolved", "withdrawn"]),
+    }),
+    categories_other_text: z.string().optional(),
+    affected: z.object({
+      vendor: z.string(),
+      products: z.array(z.string()).min(1),
+      versions: z.array(z.string()).optional(),
+      agent_card_uris: z.array(z.string()).optional(),
+      tutor_card_uris: z.array(z.string()).optional(),
+      tool_card_uris: z.array(z.string()).optional(),
+      affected_user_count: z.object({
+        kind: z.enum(["exact", "approximate", "unknown"]),
+        count: z.number().int().min(0).optional(),
+      }).optional(),
+      affected_populations: z.array(z.string()).optional(),
+    }),
+    summary: z.string(),
+    root_cause: z.object({
+      category: z.enum([
+        "training_data", "prompt_injection", "tool_abuse",
+        "refusal_taxonomy_gap", "content_filter_gap", "retrieval_failure",
+        "evaluation_gap", "deployment_misconfiguration", "supply_chain", "other",
+      ]),
+      description: z.string(),
+      category_other_text: z.string().optional(),
+    }),
+    harm: z.object({
+      severity_justification: z.string(),
+      manifested: z.boolean(),
+      narrative: z.string().optional(),
+    }),
+    mitigation: z.object({
+      actions_taken: z.array(z.string()).min(1),
+      permanent_fix: z.boolean(),
+      rollout_status: z.enum(["planned", "in_progress", "deployed"]),
+      workaround_for_users: z.string().optional(),
+    }),
+    evidence: z.object({
+      evidence_uris: z.array(z.string()).optional(),
+      prompt_provenance_uri: z.string().optional(),
+      reproduction_uri: z.string().optional(),
+      internal_postmortem_uri: z.string().optional(),
+    }).optional(),
+    references: z.array(z.object({
+      type: z.enum(["blog_post", "regulatory_filing", "academic_paper", "press_release", "customer_notice", "other"]),
+      title: z.string(),
+      uri: z.string(),
+      published_at: z.string().optional(),
+    })).optional(),
+    regulatory: z.object({
+      reported_to: z.array(z.enum([
+        "eu-ai-act-art-73", "us-omb-m-24-10", "ferpa", "coppa", "hipaa",
+        "gdpr", "state-attorney-general", "fda-21-cfr-11", "other",
+      ])).optional(),
+      reporting_deadline_met: z.boolean().optional(),
+      regulatory_filing_uris: z.array(z.string()).optional(),
+      not_reportable_justification: z.string().optional(),
+    }).optional(),
+    withdrawal: z.object({
+      withdrawn_at: z.string(),
+      reason: z.string(),
+      replacement_incident_uri: z.string().optional(),
+    }).optional(),
+    published_by: z.object({
+      name: z.string(),
+      role: z.enum(["vendor", "third-party-researcher", "user", "regulator", "auditor"]),
+      contact_uri: z.string().optional(),
+      pgp_fingerprint: z.string().optional(),
+    }),
+    published_at: z.string(),
+    last_updated_at: z.string(),
+    revision: z.object({
+      number: z.number().int().min(1),
+      change_summary: z.string(),
+    }).optional(),
+  })
+  .strict()
+  .superRefine((doc, ctx) => {
+    // Resolved requires resolved_at
+    if (doc.incident.status === "resolved" && !doc.incident.resolved_at) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "status=resolved requires resolved_at",
+      });
+    }
+    // Withdrawn requires withdrawal block
+    if (doc.incident.status === "withdrawn" && !doc.withdrawal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "status=withdrawn requires withdrawal block",
+      });
+    }
+    // Regulatory filings require URIs
+    if (doc.regulatory?.reported_to && doc.regulatory.reported_to.length > 0) {
+      if (!doc.regulatory.regulatory_filing_uris || doc.regulatory.regulatory_filing_uris.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "non-empty regulatory.reported_to requires non-empty regulatory_filing_uris",
+        });
+      }
+    }
+    // root_cause=other requires text
+    if (doc.root_cause.category === "other" && !doc.root_cause.category_other_text) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "root_cause.category=other requires category_other_text",
+      });
+    }
+    // categories contains "other" requires top-level text
+    if (doc.incident.categories.includes("other") && !doc.categories_other_text) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "incident.categories containing 'other' requires top-level categories_other_text",
+      });
+    }
+  });
+
+export type AiIncidentCard = z.infer<typeof aiIncidentCardSchema>;
+
+// Index format at /.well-known/ai-incidents.json — array of compact entries.
+export const aiIncidentIndexSchema = z.array(
+  z.object({
+    id: z.string(),
+    title: z.string().optional(),
+    severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+    status: z.enum(["active", "mitigated", "resolved", "withdrawn"]).optional(),
+    disclosed_at: z.string().optional(),
+    uri: z.string().optional(),
+  }),
+);
+export type AiIncidentIndex = z.infer<typeof aiIncidentIndexSchema>;

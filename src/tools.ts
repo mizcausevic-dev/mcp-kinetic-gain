@@ -1,6 +1,6 @@
 /**
  * MCP tool descriptors for every spec in the Kinetic Gain Protocol Suite.
- * 34 tools total across 8 specs:
+ * 43 tools total across 10 specs (v0.5.0):
  *   AEO Protocol            (4)
  *   Prompt Provenance       (3)
  *   Agent Cards             (4)
@@ -8,7 +8,9 @@
  *   MCP Tool Cards          (4)
  *   AI Tutor Cards          (6) — EdTech extension
  *   Student AI Disclosure   (5) — EdTech extension
- *   Classroom AI AUP        (5) — EdTech extension (closes the trio)
+ *   Classroom AI AUP        (5) — EdTech extension (closes the EdTech trio)
+ *   Clinical AI Disclosure  (4) — HealthTech extension
+ *   AI Incident Card        (5) — cross-cutting (includes index_fetch)
  */
 export const toolDescriptors = [
   // --------------------------------------------------------------------------
@@ -432,6 +434,116 @@ export const toolDescriptors = [
         aup_json: { type: "string", description: "AUP as inline JSON." },
         aup_url: { type: "string", format: "uri", description: "AUP URL — server fetches it." },
         disclosure_json: { type: "string", description: "Student AI Disclosure as inline JSON." },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // Clinical AI Disclosure (HealthTech extension)
+  // --------------------------------------------------------------------------
+  {
+    name: "clinical_ai_well_known_url",
+    description: "Compute the canonical Clinical AI Card well-known URL: /.well-known/clinical-ai/<system_id>.json.",
+    inputSchema: {
+      type: "object",
+      required: ["origin", "system_id"],
+      additionalProperties: false,
+      properties: {
+        origin: { type: "string", format: "uri" },
+        system_id: { type: "string", description: "Vendor's stable system identifier (kebab-case)." },
+      },
+    },
+  },
+  {
+    name: "clinical_ai_fetch",
+    description: "Fetch a Clinical AI Card from a URL. Returns the parsed, schema-validated JSON document.",
+    inputSchema: {
+      type: "object",
+      required: ["url"],
+      additionalProperties: false,
+      properties: { url: { type: "string", format: "uri" } },
+    },
+  },
+  {
+    name: "clinical_ai_validate",
+    description: "Validate a Clinical AI Card JSON document against the v0.1 schema. Enforces the headline rules: autonomy ⇔ medical device, SaMD completeness, FDA-clearance documentation, PHI ⇒ explicit HIPAA + BAA posture, and bias_audit_uri requirement for SaMD class II+ / autonomous / pre-authorization use.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string", description: "Clinical AI Card as inline JSON." } },
+    },
+  },
+  {
+    name: "clinical_ai_inspect",
+    description: "Structured summary of a Clinical AI Card: system identity, clinical context (indication / care settings / patient population), regulatory posture (FDA / SaMD), clinical role, evidence (validation studies + bias audit + performance metrics), HIPAA + BAA posture, EHR integration (FHIR / SMART / CDS Hooks), safety + mandated reporting.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // AI Incident Card (cross-cutting)
+  // --------------------------------------------------------------------------
+  {
+    name: "incident_well_known_url",
+    description: "Compute the canonical AI Incident Card well-known URL: /.well-known/ai-incidents/<id>.json.",
+    inputSchema: {
+      type: "object",
+      required: ["origin", "incident_id"],
+      additionalProperties: false,
+      properties: {
+        origin: { type: "string", format: "uri" },
+        incident_id: { type: "string", description: "Convention: INC-<YYYY-MM-DD>-<vendor>-<seq>" },
+      },
+    },
+  },
+  {
+    name: "incident_fetch",
+    description: "Fetch an AI Incident Card from a URL. Returns the parsed, schema-validated JSON document.",
+    inputSchema: {
+      type: "object",
+      required: ["url"],
+      additionalProperties: false,
+      properties: { url: { type: "string", format: "uri" } },
+    },
+  },
+  {
+    name: "incident_validate",
+    description: "Validate an AI Incident Card JSON document against the v0.1 schema. Enforces conditional rules: status=resolved requires resolved_at; status=withdrawn requires withdrawal block; non-empty regulatory.reported_to requires non-empty regulatory_filing_uris; root_cause.category=other and categories containing 'other' both require the corresponding _other_text fields.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string", description: "Incident Card as inline JSON." } },
+    },
+  },
+  {
+    name: "incident_inspect",
+    description: "Structured summary of an AI Incident Card: incident identity (id, title, severity, categories, status, timeline), affected products + versions + Agent/Tutor/Tool Card cross-references, root cause, harm, mitigation, regulatory filings, withdrawal posture, revision metadata.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "incident_index_fetch",
+    description: "HEADLINE TOOL — fetch a vendor's /.well-known/ai-incidents.json index and return a procurement-friendly summary: total count, breakdown by severity, breakdown by status, IDs sorted by disclosed_at descending. The cheapest way for a CISO or procurement reviewer to scan a vendor's incident history.",
+    inputSchema: {
+      type: "object",
+      required: ["origin"],
+      additionalProperties: false,
+      properties: {
+        origin: { type: "string", format: "uri", description: "Vendor origin (e.g. https://edu.kineticgain.com)." },
       },
     },
   },

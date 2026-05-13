@@ -2,7 +2,7 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
- * Exposes 34 tools across eight specs:
+ * v0.5.0: Exposes 43 tools across all ten specs:
  *   - AEO Protocol            (4 tools)
  *   - Prompt Provenance       (3 tools)
  *   - Agent Cards             (4 tools)
@@ -10,7 +10,9 @@
  *   - MCP Tool Cards          (4 tools)
  *   - AI Tutor Cards          (6 tools — EdTech extension)
  *   - Student AI Disclosure   (5 tools — EdTech extension)
- *   - Classroom AI AUP        (5 tools — EdTech extension, closes the trio)
+ *   - Classroom AI AUP        (5 tools — EdTech extension, closes the EdTech trio)
+ *   - Clinical AI Disclosure  (4 tools — HealthTech extension)
+ *   - AI Incident Card        (5 tools — cross-cutting, includes index_fetch)
  *
  * Drop into Claude Desktop / Cursor / any MCP-compatible client via stdio.
  */
@@ -81,6 +83,21 @@ import {
   handleClassroomAupWellKnownUrl,
 } from "./handlers/classroom-aup.js";
 
+import {
+  handleClinicalAiFetch,
+  handleClinicalAiInspect,
+  handleClinicalAiValidate,
+  handleClinicalAiWellKnownUrl,
+} from "./handlers/clinical-ai.js";
+
+import {
+  handleIncidentFetch,
+  handleIncidentIndexFetch,
+  handleIncidentInspect,
+  handleIncidentValidate,
+  handleIncidentWellKnownUrl,
+} from "./handlers/ai-incident.js";
+
 export const handlers: Record<string, (args: any) => Promise<string>> = {
   // AEO
   aeo_fetch: handleAeoFetch,
@@ -124,11 +141,22 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   aup_validate: handleClassroomAupValidate,
   aup_inspect: handleClassroomAupInspect,
   aup_check_compliance: handleClassroomAupCheckCompliance,
+  // Clinical AI Disclosure (HealthTech extension)
+  clinical_ai_well_known_url: handleClinicalAiWellKnownUrl,
+  clinical_ai_fetch: handleClinicalAiFetch,
+  clinical_ai_validate: handleClinicalAiValidate,
+  clinical_ai_inspect: handleClinicalAiInspect,
+  // AI Incident Card (cross-cutting)
+  incident_well_known_url: handleIncidentWellKnownUrl,
+  incident_fetch: handleIncidentFetch,
+  incident_validate: handleIncidentValidate,
+  incident_inspect: handleIncidentInspect,
+  incident_index_fetch: handleIncidentIndexFetch,
 };
 
 export function buildServer(): Server {
   const server = new Server(
-    { name: "mcp-kinetic-gain", version: "0.4.0" },
+    { name: "mcp-kinetic-gain", version: "0.5.0" },
     { capabilities: { tools: {} } },
   );
 
@@ -162,7 +190,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v0.4.0: listening on stdio (${toolDescriptors.length} tools across 8 specs)\n`,
+    `mcp-kinetic-gain v0.5.0: listening on stdio (${toolDescriptors.length} tools across 10 specs)\n`,
   );
 }
 
