@@ -1,5 +1,5 @@
 {
-  "name": "@mizcausevic-dev/mcp-kinetic-gain",
+  "name": "mcp-kinetic-gain",
   "version": "0.5.0",
   "description": "MCP server exposing all ten Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 43 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), and AI Incident Card (cross-cutting). Headline tools: aup_check_compliance joins an AUP with a Student AI Disclosure into a single allow/deny; incident_index_fetch summarizes a vendor's full incident history in one call.",
   "type": "module",

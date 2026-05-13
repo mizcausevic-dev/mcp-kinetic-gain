@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.0] - 2026-05-13
+
+### Published
+- First publish to the npm registry as **unscoped `mcp-kinetic-gain`**. Install with `npm i -g mcp-kinetic-gain` or run with `npx -y mcp-kinetic-gain`.
+- 43 tools across all ten Kinetic Gain Protocol Suite specs: AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, and AI Incident Card.
+- Headline cross-spec tools: `aup_check_compliance` (joins a Classroom AI AUP and a Student AI Disclosure into a machine-readable allow/deny call) and `incident_index_fetch` (aggregates a vendor's public `/.well-known/ai-incidents.json` registry).
+- 74-test suite covering every tool's happy path plus error paths, including a live local-HTTP synthetic-index test for `incident_index_fetch`.
+
+### License clarification
+- The server (this repo): **AGPL-3.0**. Reference implementation. Commercial SaaS hosts must share modifications back.
+- The Suite specs themselves: **MIT**. Maximally permissive. The split is deliberate.
+
 ## [1.0.0] - 2026-05-12
 
 ### Released

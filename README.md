@@ -1,19 +1,19 @@
 # mcp-kinetic-gain
 
-One **MCP server**, all five [Kinetic Gain Protocol Suite](https://github.com/mizcausevic-dev?q=spec) specs. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **18 tools** across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, and MCP Tool Cards.
+One **MCP server**, all ten [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **43 tools** across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), and AI Incident Card.
 
-This is the unified read-side companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders any of the 5 specs for humans, this server exposes them as callable tools for agents.
+This is the unified read-side companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders any of the 10 specs for humans, this server exposes them as callable tools for agents.
 
 ## Install
 
 ```bash
-npm install -g @mizcausevic-dev/mcp-kinetic-gain
+npm install -g mcp-kinetic-gain
 ```
 
 Or run without installing via `npx`:
 
 ```bash
-npx @mizcausevic-dev/mcp-kinetic-gain
+npx mcp-kinetic-gain
 ```
 
 ## Claude Desktop config
@@ -25,13 +25,13 @@ Add to your `claude_desktop_config.json` (macOS: `~/Library/Application Support/
   "mcpServers": {
     "kinetic-gain": {
       "command": "npx",
-      "args": ["-y", "@mizcausevic-dev/mcp-kinetic-gain"]
+      "args": ["-y", "mcp-kinetic-gain"]
     }
   }
 }
 ```
 
-Restart Claude. All 18 tools appear in the tools panel. Try:
+Restart Claude. All 43 tools appear in the tools panel. Try:
 
 > *"Use aeo_inspect on https://mizcausevic-dev.github.io to summarize the entity declaration, then use ai_evidence_verify_hash to check the content_hash of an evidence object against my candidate text."*
 
@@ -98,7 +98,7 @@ If your `candidate_text` produces an unexpected mismatch, check CRLF vs LF and t
 
 ## Tests
 
-27 unit tests against an in-process Node HTTP server (no external network). Every tool's happy path + at least one error path:
+74 unit tests against an in-process Node HTTP server (no external network). Every tool's happy path + at least one error path, plus a live local-HTTP synthetic-index test for `incident_index_fetch`:
 
 ```bash
 npm install
@@ -109,19 +109,28 @@ npm run build
 
 ## License
 
-AGPL-3.0.
+**This server: AGPL-3.0.** Reference implementation. Commercial SaaS hosts must share modifications back.
+
+**The specs themselves: MIT.** Maximally permissive. Anyone may implement, validate against, or extend any Kinetic Gain Protocol Suite specification. The dual-license split is deliberate: the protocol stays open, the reference server is copyleft.
 
 ## Kinetic Gain Protocol Suite
 
-| Spec | Tools in this server | Spec repo |
+| Spec | Tools in this server | Vertical |
 |---|---|---|
-| AEO Protocol | 4 | [aeo-protocol-spec](https://github.com/mizcausevic-dev/aeo-protocol-spec) |
-| Prompt Provenance | 3 | [prompt-provenance-spec](https://github.com/mizcausevic-dev/prompt-provenance-spec) |
-| Agent Cards | 4 | [agent-cards-spec](https://github.com/mizcausevic-dev/agent-cards-spec) |
-| AI Evidence Format | 3 | [ai-evidence-format-spec](https://github.com/mizcausevic-dev/ai-evidence-format-spec) |
-| MCP Tool Cards | 4 | [mcp-tool-card-spec](https://github.com/mizcausevic-dev/mcp-tool-card-spec) |
+| AEO Protocol | 4 | Core |
+| Prompt Provenance | 3 | Core |
+| Agent Cards | 4 | Core |
+| AI Evidence Format | 3 | Core |
+| MCP Tool Cards | 4 | Core |
+| AI Tutor Cards | 4 | EdTech |
+| Student AI Disclosure | 4 | EdTech (FERPA/COPPA) |
+| Classroom AI AUP | 4 + 1 cross-spec (`aup_check_compliance`) | EdTech |
+| Clinical AI Disclosure | 4 | HealthTech (FDA SaMD + HIPAA) |
+| AI Incident Card | 4 + 1 cross-spec (`incident_index_fetch`) | Cross-cutting (EU AI Act Article 73) |
 
-Companion read-side product: [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer).
+**Suite hub:** [suite.kineticgain.com](https://suite.kineticgain.com/)
+**Companion visualizer:** [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer)
+**Red-team bench:** [prompt-injection-bench](https://github.com/mizcausevic-dev/prompt-injection-bench)
 
 ---
 
