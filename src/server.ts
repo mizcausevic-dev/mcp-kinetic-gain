@@ -2,6 +2,11 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
+ * v0.5.1: Same 43-tool MCP surface as v0.5.0, plus a CLI mode.
+ *   `mcp-kinetic-gain validate <paths...>` validates Suite JSON files
+ *   against the bundled zod schemas. No-arg invocation still launches the
+ *   stdio MCP server (unchanged for existing Claude Desktop / Cursor configs).
+ *
  * v0.5.0: Exposes 43 tools across all ten specs:
  *   - AEO Protocol            (4 tools)
  *   - Prompt Provenance       (3 tools)
@@ -16,6 +21,8 @@
  *
  * Drop into Claude Desktop / Cursor / any MCP-compatible client via stdio.
  */
+import { pathToFileURL } from "node:url";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -156,7 +163,7 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
 
 export function buildServer(): Server {
   const server = new Server(
-    { name: "mcp-kinetic-gain", version: "0.5.0" },
+    { name: "mcp-kinetic-gain", version: "0.5.1" },
     { capabilities: { tools: {} } },
   );
 
@@ -190,11 +197,32 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v0.5.0: listening on stdio (${toolDescriptors.length} tools across 10 specs)\n`,
+    `mcp-kinetic-gain v0.5.1: listening on stdio (${toolDescriptors.length} tools across 10 specs)\n`,
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`) {
+// Robust entry-point check that works on Windows + Unix. The previous
+// `file://${argv[1]}` string comparison failed on Windows because Node emits
+// `file:///C:/...` (three slashes) for absolute Windows paths.
+const isEntryPoint = (() => {
+  const arg = process.argv[1];
+  if (!arg) return false;
+  try {
+    return pathToFileURL(arg).href === import.meta.url;
+  } catch {
+    return false;
+  }
+})();
+
+if (isEntryPoint) {
+  // Dispatch CLI subcommands (validate, --help, --version) before falling
+  // through to MCP stdio server mode. Keeps the no-arg invocation behavior
+  // identical to pre-0.5.1 for existing Claude Desktop / Cursor configs.
+  const { dispatchCli } = await import("./cli.js");
+  const dispatched = await dispatchCli(process.argv);
+  if (dispatched.handled) {
+    process.exit(dispatched.exitCode ?? 0);
+  }
   main().catch((err) => {
     process.stderr.write(`mcp-kinetic-gain: fatal: ${err}\n`);
     process.exit(1);

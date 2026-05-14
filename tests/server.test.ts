@@ -1,8 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Server as HttpServer } from "node:http";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { handlers } from "../src/server.js";
 import { canonicalSha256 } from "../src/common.js";
+import { dispatchCli, runValidate, PACKAGE_VERSION } from "../src/cli.js";
 
 // ----------------------------------------------------------------------------
 // Test fixtures
@@ -1148,5 +1152,101 @@ describe("AI Incident Card", () => {
 describe("Unknown tool", () => {
   it("server exposes exactly the 43 declared tools (10 specs total)", () => {
     expect(Object.keys(handlers)).toHaveLength(43);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// CLI mode (v0.5.1)
+// ----------------------------------------------------------------------------
+describe("CLI dispatch", () => {
+  it("returns handled=false when no subcommand is given (falls through to MCP server)", async () => {
+    const out = await dispatchCli(["node", "server.js"]);
+    expect(out.handled).toBe(false);
+  });
+
+  it("handles --version and exits 0", async () => {
+    const out = await dispatchCli(["node", "server.js", "--version"]);
+    expect(out.handled).toBe(true);
+    expect(out.exitCode).toBe(0);
+  });
+
+  it("handles --help and exits 0", async () => {
+    const out = await dispatchCli(["node", "server.js", "--help"]);
+    expect(out.handled).toBe(true);
+    expect(out.exitCode).toBe(0);
+  });
+
+  it("rejects unknown flags with exit code 3", async () => {
+    const out = await dispatchCli(["node", "server.js", "--bogus"]);
+    expect(out.handled).toBe(true);
+    expect(out.exitCode).toBe(3);
+  });
+
+  it("exposes the package version", () => {
+    expect(PACKAGE_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});
+
+describe("CLI validate command", () => {
+  let workDir: string;
+
+  beforeAll(async () => {
+    workDir = await mkdtemp(join(tmpdir(), "kg-cli-test-"));
+    // Valid AEO doc (mirrors the AEO_DOC fixture above)
+    await writeFile(join(workDir, "valid-aeo.json"), JSON.stringify(AEO_DOC));
+    // Invalid AEO doc — entity is a string instead of an object
+    await writeFile(
+      join(workDir, "invalid-aeo.json"),
+      JSON.stringify({ aeo_version: "0.1", entity: "should be an object" }),
+    );
+    // Document with no recognized version field
+    await writeFile(
+      join(workDir, "unrecognized.json"),
+      JSON.stringify({ hello: "world" }),
+    );
+    // Document that fails JSON parsing
+    await writeFile(join(workDir, "broken.json"), "{ not valid json");
+  });
+
+  afterAll(async () => {
+    await rm(workDir, { recursive: true, force: true });
+  });
+
+  it("validates a passing document and exits 0", async () => {
+    const code = await runValidate([join(workDir, "valid-aeo.json")]);
+    expect(code).toBe(0);
+  });
+
+  it("fails the run when a document violates its schema (exit 1)", async () => {
+    const code = await runValidate([join(workDir, "invalid-aeo.json")]);
+    expect(code).toBe(1);
+  });
+
+  it("fails the run on unparseable JSON (exit 1)", async () => {
+    const code = await runValidate([join(workDir, "broken.json")]);
+    expect(code).toBe(1);
+  });
+
+  it("returns exit 2 when no input has a recognized version field", async () => {
+    const code = await runValidate([join(workDir, "unrecognized.json")]);
+    expect(code).toBe(2);
+  });
+
+  it("returns exit 3 when called with no paths", async () => {
+    const code = await runValidate([]);
+    expect(code).toBe(3);
+  });
+
+  it("returns exit 0 (no files matched) when given a non-matching glob", async () => {
+    const code = await runValidate([join(workDir, "no-such-pattern-*.xyz")]);
+    expect(code).toBe(0);
+  });
+
+  it("aggregates: one failing file in a mixed batch makes the run fail", async () => {
+    const code = await runValidate([
+      join(workDir, "valid-aeo.json"),
+      join(workDir, "invalid-aeo.json"),
+    ]);
+    expect(code).toBe(1);
   });
 });

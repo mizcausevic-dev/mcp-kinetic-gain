@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.1] - 2026-05-13
+
+### Added
+- **CLI mode.** The same binary now doubles as a Suite JSON validator outside any MCP host: `mcp-kinetic-gain validate <paths...>` (also `--help`, `--version`). Auto-detects which of the ten Suite specs each input belongs to via its top-level version field and validates against the bundled zod schemas. GitHub-Actions-aware output (`::error::` annotations when `GITHUB_ACTIONS=true`). Exit codes: `0` pass, `1` fail, `2` no recognized spec, `3` usage error.
+- `fast-glob` runtime dependency for glob expansion in the CLI.
+- 12 new tests covering CLI dispatch (`--help`, `--version`, unknown flags, fallthrough to MCP) and `validate` behavior (pass, fail, parse error, unrecognized, mixed batches). Total test count: 86.
+
+### Fixed
+- Entry-point detection was broken on Windows. The previous `import.meta.url === \`file://\${argv[1]}\`` comparison failed because Node emits `file:///C:/...` (three slashes) for absolute Windows paths, but the constructed string had two. Replaced with `pathToFileURL(argv[1]).href === import.meta.url`, which is robust on both Windows and Unix.
+- `fast-glob` patterns on Windows now normalize backslashes to forward slashes defensively (backslashes are glob escape characters in fast-glob's pattern dialect).
+
+### Unchanged
+- All 43 MCP tools and their behavior, the schemas, the well-known URLs, the cross-spec tools (`aup_check_compliance`, `incident_index_fetch`). Running `mcp-kinetic-gain` with no arguments still launches the stdio MCP server — existing Claude Desktop / Cursor configs continue to work.
+
+### Published via
+- First release through the new tag-driven GitHub Actions auto-publish workflow (`.github/workflows/publish.yml`) — `git tag v0.5.1 && git push --tags` triggered the build → test → publish pipeline. npm provenance attestation included.
+
 ## [0.5.0] - 2026-05-13
 
 ### Published

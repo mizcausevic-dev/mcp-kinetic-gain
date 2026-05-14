@@ -35,6 +35,38 @@ Restart Claude. All 43 tools appear in the tools panel. Try:
 
 > *"Use aeo_inspect on https://mizcausevic-dev.github.io to summarize the entity declaration, then use ai_evidence_verify_hash to check the content_hash of an evidence object against my candidate text."*
 
+## CLI mode (v0.5.1+)
+
+The same binary doubles as a Suite JSON validator outside any MCP host. Useful in CI, pre-commit hooks, or local sanity-checks.
+
+```bash
+# Validate a single document
+npx mcp-kinetic-gain validate path/to/ai-entity.json
+
+# Validate a tree of well-known files
+npx mcp-kinetic-gain validate ".well-known/**/*.json"
+
+# Multiple paths or globs
+npx mcp-kinetic-gain validate cards/clinical-*.json cards/incident-*.json
+
+# Other commands
+npx mcp-kinetic-gain --version
+npx mcp-kinetic-gain --help
+```
+
+The CLI auto-detects which Suite spec each file belongs to via its top-level version field (`aeo_version`, `clinical_ai_card_version`, `aup_version`, etc.) and validates it against the same zod schemas the MCP tools use. Output is GitHub-Actions-aware: when `GITHUB_ACTIONS=true`, failures emit `::error::` workflow commands so they surface as PR annotations.
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| `0` | Every matched file passed validation |
+| `1` | At least one file failed validation, failed to parse, or hit a config error |
+| `2` | No file in the input matched a known Suite spec |
+| `3` | Usage error (missing arg, unknown flag) |
+
+Running `mcp-kinetic-gain` with **no arguments** still launches the stdio MCP server — existing Claude Desktop / Cursor configs are unaffected.
+
 ## Tools
 
 | Spec | Tool | Notes |

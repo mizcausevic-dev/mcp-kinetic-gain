@@ -1,7 +1,7 @@
 {
   "name": "mcp-kinetic-gain",
-  "version": "0.5.0",
-  "description": "MCP server exposing all ten Kinetic Gain Protocol Suite specs as tools. One Claude Desktop config, 43 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), and AI Incident Card (cross-cutting). Headline tools: aup_check_compliance joins an AUP with a Student AI Disclosure into a single allow/deny; incident_index_fetch summarizes a vendor's full incident history in one call.",
+  "version": "0.5.1",
+  "description": "MCP server and CLI for all ten Kinetic Gain Protocol Suite specs. One Claude Desktop config, 43 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), and AI Incident Card (cross-cutting). Headline tools: aup_check_compliance joins an AUP with a Student AI Disclosure into a single allow/deny; incident_index_fetch summarizes a vendor's full incident history in one call. CLI mode validates Suite JSON files against the bundled zod schemas.",
   "type": "module",
   "bin": {
     "mcp-kinetic-gain": "./dist/server.js"
@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "fast-glob": "^3.3.2",
     "zod": "^3.23.0"
   },
   "devDependencies": {
