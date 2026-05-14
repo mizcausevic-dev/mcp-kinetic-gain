@@ -1,7 +1,7 @@
 {
   "name": "mcp-kinetic-gain",
-  "version": "0.5.1",
-  "description": "MCP server and CLI for all ten Kinetic Gain Protocol Suite specs. One Claude Desktop config, 43 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), and AI Incident Card (cross-cutting). Headline tools: aup_check_compliance joins an AUP with a Student AI Disclosure into a single allow/deny; incident_index_fetch summarizes a vendor's full incident history in one call. CLI mode validates Suite JSON files against the bundled zod schemas.",
+  "version": "0.5.2",
+  "description": "MCP server and CLI for all eleven Kinetic Gain Protocol Suite specs. One Claude Desktop config, 47 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), AI Incident Card, and AI Procurement Decision Card (the buyer-side artifact). Headline tools: aup_check_compliance joins an AUP with a Student AI Disclosure into a single allow/deny; incident_index_fetch summarizes a vendor's full incident history in one call. CLI mode validates Suite JSON files against the bundled zod schemas.",
   "type": "module",
   "bin": {
     "mcp-kinetic-gain": "./dist/server.js"
@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js"
   },
-  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "classroom-ai-aup", "clinical-ai", "ai-incident-card", "kinetic-gain-protocol-suite", "claude", "edtech", "healthtech", "ferpa", "coppa", "hipaa", "fda", "samd"],
+  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "classroom-ai-aup", "clinical-ai", "ai-incident-card", "ai-procurement-decision-card", "kinetic-gain-protocol-suite", "claude", "edtech", "healthtech", "ferpa", "coppa", "hipaa", "fda", "samd", "ai-procurement"],
   "author": "Miz Causevic",
   "license": "AGPL-3.0",
   "repository": {

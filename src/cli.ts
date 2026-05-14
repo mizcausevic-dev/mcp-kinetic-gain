@@ -24,13 +24,14 @@ import {
   aiIncidentCardSchema,
   classroomAupSchema,
   clinicalAiCardSchema,
+  decisionCardSchema,
   mcpToolCardSchema,
   promptProvenanceSchema,
   studentDisclosureSchema,
   tutorCardSchema,
 } from "./schemas.js";
 
-export const PACKAGE_VERSION = "0.5.1";
+export const PACKAGE_VERSION = "0.5.2";
 
 interface SpecMapping {
   key: string;
@@ -52,6 +53,7 @@ const SPECS: SpecMapping[] = [
   { key: "classroom-aup",      versionField: "aup_version",              displayName: "Classroom AI AUP",        schema: classroomAupSchema },
   { key: "clinical-ai",        versionField: "clinical_ai_card_version", displayName: "Clinical AI Card",        schema: clinicalAiCardSchema },
   { key: "ai-incident",        versionField: "incident_card_version",    displayName: "AI Incident Card",        schema: aiIncidentCardSchema },
+  { key: "decision-card",      versionField: "decision_card_version",    displayName: "AI Procurement Decision Card", schema: decisionCardSchema },
 ];
 
 function detectSpec(doc: unknown): SpecMapping | null {

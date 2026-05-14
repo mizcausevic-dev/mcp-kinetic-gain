@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.2] - 2026-05-14
+
+### Added — Spec #11
+
+- **AI Procurement Decision Card** support. The eleventh Kinetic Gain Protocol Suite spec, and the first buyer-side artifact. A Decision Card records the outcome of a procurement review of one or more vendor declarations.
+- Four new MCP tools: `decision_card_well_known_url`, `decision_card_fetch`, `decision_card_validate`, `decision_card_inspect`.
+- Discriminator: top-level `decision_card_version` field. Well-known path: `/.well-known/decisions/{decision_id}.json`.
+- `decisionCardSchema` in `src/schemas.ts` enforces conditional rules via `superRefine`: `status=approved-with-conditions` or `rejected-with-remediation` requires a non-empty `conditions` array; `status=withdrawn` requires a `withdrawal` block; `publication.is_public=true` requires `publication.publication_uri`.
+- 10 new tests covering happy path + every conditional rule + URL handling. Total test count: 86 → 96.
+- CLI dispatcher and `kg-validate-action@v0.1.1` updated in parallel — Decision Cards are auto-detected and validated by both `mcp-kinetic-gain validate` and the GitHub Action.
+
+### Updated
+
+- Tool count: 43 → 47.
+- Spec count: 10 → 11.
+- All headline numbers across README + package.json description.
+
 ## [0.5.1] - 2026-05-13
 
 ### Added

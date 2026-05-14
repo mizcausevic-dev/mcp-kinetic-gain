@@ -1147,11 +1147,167 @@ describe("AI Incident Card", () => {
 });
 
 // ----------------------------------------------------------------------------
+// AI Procurement Decision Card (spec #11 — buyer-side)
+// ----------------------------------------------------------------------------
+const DECISION_CARD = {
+  decision_card_version: "0.1",
+  decision_id: "TEST-DEC-001",
+  issued_at: "2026-05-14T19:00:00Z",
+  buyer: {
+    name: "Test District",
+    type: "school-district",
+    jurisdiction: "US-CA",
+  },
+  decision: {
+    status: "approved-with-conditions",
+    scope: "K-12 classroom use",
+  },
+  subject: {
+    vendor_name: "AcmeTutor Inc.",
+    product_name: "AcmeTutor 3.0",
+    documents_reviewed: [
+      { type: "tutor-card", url: "https://acmetutor.example/.well-known/tutor-card.json" },
+    ],
+  },
+  conditions: [
+    { id: "no-training", description: "Must not train on student data.", enforcement: "contractual" },
+  ],
+  rationale: "Approved with one condition.",
+};
+
+describe("AI Procurement Decision Card", () => {
+  it("well-known URL is /.well-known/decisions/<decision_id>.json", async () => {
+    const out = JSON.parse(await handlers.decision_card_well_known_url!({
+      origin: "https://springfield.edu",
+      decision_id: "SPRINGFIELD-DEC-2026-001",
+    }));
+    expect(out.url).toBe("https://springfield.edu/.well-known/decisions/SPRINGFIELD-DEC-2026-001.json");
+  });
+
+  it("URL-encodes special characters in decision_id", async () => {
+    const out = JSON.parse(await handlers.decision_card_well_known_url!({
+      origin: "https://example.com",
+      decision_id: "DEC#with/slashes",
+    }));
+    expect(out.url).toBe("https://example.com/.well-known/decisions/DEC%23with%2Fslashes.json");
+  });
+
+  it("strips trailing slash from origin", async () => {
+    const out = JSON.parse(await handlers.decision_card_well_known_url!({
+      origin: "https://example.com//",
+      decision_id: "X",
+    }));
+    expect(out.url).toBe("https://example.com/.well-known/decisions/X.json");
+  });
+
+  it("validates a happy-path approved-with-conditions card", async () => {
+    const out = JSON.parse(await handlers.decision_card_validate!({
+      document_json: JSON.stringify(DECISION_CARD),
+    }));
+    expect(out.valid).toBe(true);
+    expect(out.decision_id).toBe("TEST-DEC-001");
+    expect(out.status).toBe("approved-with-conditions");
+    expect(out.buyer).toBe("Test District");
+    expect(out.vendor).toBe("AcmeTutor Inc.");
+    expect(out.has_conditions).toBe(true);
+    expect(out.condition_count).toBe(1);
+  });
+
+  it("rejects approved-with-conditions WITHOUT a conditions array", async () => {
+    const bad = { ...DECISION_CARD, conditions: [] };
+    const out = JSON.parse(await handlers.decision_card_validate!({
+      document_json: JSON.stringify(bad),
+    }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toContain("conditions");
+  });
+
+  it("rejects rejected-with-remediation WITHOUT a conditions array", async () => {
+    const bad = {
+      ...DECISION_CARD,
+      decision: { status: "rejected-with-remediation" },
+      conditions: undefined,
+    };
+    delete (bad as { conditions?: unknown }).conditions;
+    const out = JSON.parse(await handlers.decision_card_validate!({
+      document_json: JSON.stringify(bad),
+    }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toContain("conditions");
+  });
+
+  it("rejects withdrawn status without a withdrawal block", async () => {
+    const bad = { ...DECISION_CARD, decision: { status: "withdrawn" }, conditions: undefined };
+    delete (bad as { conditions?: unknown }).conditions;
+    const out = JSON.parse(await handlers.decision_card_validate!({
+      document_json: JSON.stringify(bad),
+    }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toContain("withdrawal");
+  });
+
+  it("accepts withdrawn status when withdrawal block is present", async () => {
+    const good = {
+      ...DECISION_CARD,
+      decision: { status: "withdrawn" },
+      conditions: undefined,
+      withdrawal: { at: "2026-06-01T00:00:00Z", reason: "Vendor exited the market." },
+    };
+    delete (good as { conditions?: unknown }).conditions;
+    const out = JSON.parse(await handlers.decision_card_validate!({
+      document_json: JSON.stringify(good),
+    }));
+    expect(out.valid).toBe(true);
+    expect(out.status).toBe("withdrawn");
+  });
+
+  it("rejects publication.is_public=true without a publication_uri", async () => {
+    const bad = {
+      ...DECISION_CARD,
+      publication: { is_public: true },
+    };
+    const out = JSON.parse(await handlers.decision_card_validate!({
+      document_json: JSON.stringify(bad),
+    }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toContain("publication_uri");
+  });
+
+  it("inspects produce a procurement-grade summary including rubric counts", async () => {
+    const cardWithRubric = {
+      ...DECISION_CARD,
+      criteria: {
+        rubric: [
+          { id: "a", result: "pass" },
+          { id: "b", result: "partial" },
+          { id: "c", result: "fail" },
+          { id: "d", result: "pass" },
+        ],
+      },
+    };
+    const out = JSON.parse(await handlers.decision_card_inspect!({
+      document_json: JSON.stringify(cardWithRubric),
+    }));
+    expect(out.decision_id).toBe("TEST-DEC-001");
+    expect(out.decision.status).toBe("approved-with-conditions");
+    expect(out.subject.vendor).toBe("AcmeTutor Inc.");
+    expect(out.subject.documents_reviewed_count).toBe(1);
+    expect(out.subject.reviewed_document_types).toEqual(["tutor-card"]);
+    expect(out.rubric_summary.total_criteria).toBe(4);
+    expect(out.rubric_summary.pass).toBe(2);
+    expect(out.rubric_summary.partial).toBe(1);
+    expect(out.rubric_summary.fail).toBe(1);
+    expect(out.conditions_count).toBe(1);
+    expect(out.withdrawn).toBe(false);
+  });
+});
+
+// ----------------------------------------------------------------------------
 // Cross-cutting
 // ----------------------------------------------------------------------------
 describe("Unknown tool", () => {
-  it("server exposes exactly the 43 declared tools (10 specs total)", () => {
-    expect(Object.keys(handlers)).toHaveLength(43);
+  it("server exposes exactly the 47 declared tools (11 specs total)", () => {
+    expect(Object.keys(handlers)).toHaveLength(47);
   });
 });
 

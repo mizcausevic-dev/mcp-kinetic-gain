@@ -2,6 +2,12 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
+ * v0.5.2: Adds AI Procurement Decision Card support (spec #11). Now 47 tools
+ *   across 11 specs. Decision Card is the buyer-side artifact that closes the
+ *   loop: records the outcome of a procurement review of vendor declarations,
+ *   cites documents reviewed by URL + content hash, enforces conditional
+ *   rules (status=approved-with-conditions requires conditions, etc.).
+ *
  * v0.5.1: Same 43-tool MCP surface as v0.5.0, plus a CLI mode.
  *   `mcp-kinetic-gain validate <paths...>` validates Suite JSON files
  *   against the bundled zod schemas. No-arg invocation still launches the
@@ -105,6 +111,13 @@ import {
   handleIncidentWellKnownUrl,
 } from "./handlers/ai-incident.js";
 
+import {
+  handleDecisionCardFetch,
+  handleDecisionCardInspect,
+  handleDecisionCardValidate,
+  handleDecisionCardWellKnownUrl,
+} from "./handlers/decision-card.js";
+
 export const handlers: Record<string, (args: any) => Promise<string>> = {
   // AEO
   aeo_fetch: handleAeoFetch,
@@ -159,11 +172,16 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   incident_validate: handleIncidentValidate,
   incident_inspect: handleIncidentInspect,
   incident_index_fetch: handleIncidentIndexFetch,
+  // AI Procurement Decision Card (cross-cutting — buyer-side, spec #11)
+  decision_card_well_known_url: handleDecisionCardWellKnownUrl,
+  decision_card_fetch: handleDecisionCardFetch,
+  decision_card_validate: handleDecisionCardValidate,
+  decision_card_inspect: handleDecisionCardInspect,
 };
 
 export function buildServer(): Server {
   const server = new Server(
-    { name: "mcp-kinetic-gain", version: "0.5.1" },
+    { name: "mcp-kinetic-gain", version: "0.5.2" },
     { capabilities: { tools: {} } },
   );
 
@@ -197,7 +215,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v0.5.1: listening on stdio (${toolDescriptors.length} tools across 10 specs)\n`,
+    `mcp-kinetic-gain v0.5.2: listening on stdio (${toolDescriptors.length} tools across 11 specs)\n`,
   );
 }
 

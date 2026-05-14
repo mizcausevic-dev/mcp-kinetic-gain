@@ -1016,3 +1016,152 @@ export const aiIncidentIndexSchema = z.array(
   }),
 );
 export type AiIncidentIndex = z.infer<typeof aiIncidentIndexSchema>;
+
+// ============================================================================
+// AI Procurement Decision Card — buyer-side artifact (spec #11)
+// ============================================================================
+export const decisionCardSchema = z
+  .object({
+    decision_card_version: z.literal("0.1"),
+    decision_id: z.string().min(1).max(128),
+    issued_at: z.string(),
+    buyer: z.object({
+      name: z.string().min(1),
+      type: z.enum([
+        "organization", "agency", "school-district", "school", "hospital",
+        "health-system", "research-institution", "auditor", "individual",
+      ]),
+      category: z.string().optional(),
+      jurisdiction: z.string().optional(),
+      url: z.string().optional(),
+      contact: z.string().optional(),
+      id: z.string().optional(),
+    }).strict(),
+    decision_maker: z.object({
+      role: z.string().min(1),
+      name: z.string().optional(),
+      department: z.string().optional(),
+      authority: z.string().optional(),
+    }).strict().optional(),
+    decision: z.object({
+      status: z.enum([
+        "approved", "approved-with-conditions",
+        "rejected", "rejected-with-remediation",
+        "pending", "withdrawn", "expired",
+      ]),
+      effective_from: z.string().optional(),
+      effective_until: z.string().optional(),
+      scope: z.string().optional(),
+    }).strict(),
+    subject: z.object({
+      vendor_name: z.string().min(1),
+      product_name: z.string().optional(),
+      vendor_id: z.string().optional(),
+      documents_reviewed: z.array(
+        z.object({
+          type: z.enum([
+            "aeo", "prompt-provenance", "agent-card", "ai-evidence",
+            "tool-card", "tutor-card", "student-ai-disclosure",
+            "classroom-aup", "clinical-ai-card", "incident-card", "other",
+          ]),
+          url: z.string(),
+          fetched_at: z.string().optional(),
+          content_hash: z.string().optional(),
+          version: z.string().optional(),
+        }).strict(),
+      ).optional(),
+    }).strict(),
+    criteria: z.object({
+      policy_uris: z.array(z.string()).optional(),
+      rubric: z.array(
+        z.object({
+          id: z.string().min(1),
+          description: z.string().optional(),
+          weight: z.number().min(0).max(1).optional(),
+          result: z.enum(["pass", "pass-with-condition", "partial", "fail", "n/a"]),
+          notes: z.string().optional(),
+        }).strict(),
+      ).optional(),
+    }).strict().optional(),
+    conditions: z.array(
+      z.object({
+        id: z.string().min(1),
+        description: z.string().min(1),
+        enforcement: z.enum([
+          "contractual", "technical", "audit", "self-attestation", "regulatory", "other",
+        ]).optional(),
+        violation_response: z.string().optional(),
+        verification_uri: z.string().optional(),
+      }).strict(),
+    ).optional(),
+    rationale: z.string().min(1),
+    history: z.array(
+      z.object({
+        event: z.enum([
+          "review_started", "documents_collected", "review_completed",
+          "approved", "approved-with-conditions",
+          "rejected", "rejected-with-remediation",
+          "pending", "withdrawn", "expired", "appealed", "amended", "other",
+        ]),
+        at: z.string(),
+        actor: z.string().optional(),
+        note: z.string().optional(),
+      }).strict(),
+    ).optional(),
+    appeals: z.object({
+      deadline: z.string().optional(),
+      process_uri: z.string().optional(),
+      contact: z.string().optional(),
+    }).strict().optional(),
+    publication: z.object({
+      publication_uri: z.string().optional(),
+      is_public: z.boolean().optional(),
+      visibility_notes: z.string().optional(),
+    }).strict().optional(),
+    signatures: z.array(
+      z.object({
+        signer: z.string().min(1),
+        signed_at: z.string(),
+        method: z.enum(["digital", "wet-ink", "electronic-attestation", "cryptographic", "other"]).optional(),
+        key_uri: z.string().optional(),
+        signature_value: z.string().optional(),
+      }).strict(),
+    ).optional(),
+    withdrawal: z.object({
+      at: z.string(),
+      reason: z.string().min(1),
+      replaces: z.string().optional(),
+    }).strict().optional(),
+  })
+  .strict()
+  .superRefine((doc, ctx) => {
+    // status=approved-with-conditions or rejected-with-remediation requires conditions array with ≥1 entry
+    if (
+      (doc.decision.status === "approved-with-conditions" || doc.decision.status === "rejected-with-remediation")
+      && (!doc.conditions || doc.conditions.length === 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["conditions"],
+        message: `decision.status=${doc.decision.status} requires at least one entry in conditions`,
+      });
+    }
+    // status=withdrawn requires withdrawal block
+    if (doc.decision.status === "withdrawn" && !doc.withdrawal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["withdrawal"],
+        message: "decision.status=withdrawn requires a withdrawal block (at + reason)",
+      });
+    }
+    // publication.is_public=true requires publication_uri
+    if (doc.publication?.is_public === true && !doc.publication?.publication_uri) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["publication", "publication_uri"],
+        message: "publication.is_public=true requires publication.publication_uri",
+      });
+    }
+  });
+
+export type DecisionCard = z.infer<typeof decisionCardSchema>;

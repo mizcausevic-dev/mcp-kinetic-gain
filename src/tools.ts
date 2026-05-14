@@ -547,4 +547,53 @@ export const toolDescriptors = [
       },
     },
   },
+
+  // --------------------------------------------------------------------------
+  // AI Procurement Decision Card (cross-cutting, buyer-side — spec #11)
+  // --------------------------------------------------------------------------
+  {
+    name: "decision_card_well_known_url",
+    description: "Compute the canonical AI Procurement Decision Card well-known URL: /.well-known/decisions/<decision_id>.json.",
+    inputSchema: {
+      type: "object",
+      required: ["origin", "decision_id"],
+      additionalProperties: false,
+      properties: {
+        origin: { type: "string", format: "uri" },
+        decision_id: { type: "string", description: "Buyer-issued identifier (e.g. SPRINGFIELD-DEC-2026-001)." },
+      },
+    },
+  },
+  {
+    name: "decision_card_fetch",
+    description: "Fetch an AI Procurement Decision Card from a URL. Returns the parsed, schema-validated JSON document.",
+    inputSchema: {
+      type: "object",
+      required: ["url"],
+      additionalProperties: false,
+      properties: { url: { type: "string", format: "uri" } },
+    },
+  },
+  {
+    name: "decision_card_validate",
+    description: "Validate an AI Procurement Decision Card JSON document against the v0.1 schema. Enforces conditional rules: status=approved-with-conditions and status=rejected-with-remediation require at least one entry in conditions; status=withdrawn requires a withdrawal block; publication.is_public=true requires publication_uri.",
+    inputSchema: {
+      type: "object",
+      required: ["document_json"],
+      additionalProperties: false,
+      properties: { document_json: { type: "string", description: "Decision Card as inline JSON." } },
+    },
+  },
+  {
+    name: "decision_card_inspect",
+    description: "Structured summary of an AI Procurement Decision Card: buyer identity, decision status + scope, vendor + documents reviewed (by type and URL), rubric pass/partial/fail counts, conditions count, signatures count, publication posture, history event count, withdrawal flag.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
 ];
