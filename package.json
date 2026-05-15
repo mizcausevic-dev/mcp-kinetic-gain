@@ -1,21 +1,47 @@
 {
   "name": "mcp-kinetic-gain",
-  "version": "0.5.2",
-  "description": "MCP server and CLI for all eleven Kinetic Gain Protocol Suite specs. One Claude Desktop config, 47 tools across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), AI Incident Card, and AI Procurement Decision Card (the buyer-side artifact). Headline tools: aup_check_compliance joins an AUP with a Student AI Disclosure into a single allow/deny; incident_index_fetch summarizes a vendor's full incident history in one call. CLI mode validates Suite JSON files against the bundled zod schemas.",
+  "version": "0.6.0",
+  "description": "MCP server and CLI for all eleven Kinetic Gain Protocol Suite specs + v0.1.0 implementation tooling preview. One Claude Desktop config, 60 tools (47 spec + 13 implementation-preview): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card + ed25519 attestation verification, hash-chained audit-stream events, cross-spec drift detection, Decision Intelligence preview. Headline tools: aup_check_compliance, decision_card_validate, decision_card_to_policy_bundle, attestation_verify, suite_doc_drift, audit_chain_verify. CLI mode validates Suite JSON files against the bundled zod schemas.",
   "type": "module",
   "bin": {
     "mcp-kinetic-gain": "./dist/server.js"
   },
   "main": "./dist/server.js",
   "types": "./dist/server.d.ts",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js"
   },
-  "keywords": ["mcp", "model-context-protocol", "aeo", "agent-cards", "prompt-provenance", "tutor-cards", "student-ai-disclosure", "classroom-ai-aup", "clinical-ai", "ai-incident-card", "ai-procurement-decision-card", "kinetic-gain-protocol-suite", "claude", "edtech", "healthtech", "ferpa", "coppa", "hipaa", "fda", "samd", "ai-procurement"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "aeo",
+    "agent-cards",
+    "prompt-provenance",
+    "tutor-cards",
+    "student-ai-disclosure",
+    "classroom-ai-aup",
+    "clinical-ai",
+    "ai-incident-card",
+    "ai-procurement-decision-card",
+    "kinetic-gain-protocol-suite",
+    "claude",
+    "edtech",
+    "healthtech",
+    "ferpa",
+    "coppa",
+    "hipaa",
+    "fda",
+    "samd",
+    "ai-procurement"
+  ],
   "author": "Miz Causevic",
   "license": "AGPL-3.0",
   "repository": {
@@ -28,6 +54,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@noble/ed25519": "^2.3.0",
     "fast-glob": "^3.3.2",
     "zod": "^3.23.0"
   },

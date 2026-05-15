@@ -1306,8 +1306,8 @@ describe("AI Procurement Decision Card", () => {
 // Cross-cutting
 // ----------------------------------------------------------------------------
 describe("Unknown tool", () => {
-  it("server exposes exactly the 47 declared tools (11 specs total)", () => {
-    expect(Object.keys(handlers)).toHaveLength(47);
+  it("server exposes exactly the 60 declared tools (11 specs + 5 cross-cutting ops, v0.6.0)", () => {
+    expect(Object.keys(handlers)).toHaveLength(60);
   });
 });
 
@@ -1404,5 +1404,505 @@ describe("CLI validate command", () => {
       join(workDir, "invalid-aeo.json"),
     ]);
     expect(code).toBe(1);
+  });
+});
+
+// ============================================================================
+// v0.6.0 — Decision Intelligence preview tools
+// ============================================================================
+
+describe("v0.6.0: decision_card_infer_status", () => {
+  it("returns 'approved' when every result is pass", async () => {
+    const out = JSON.parse(
+      await handlers.decision_card_infer_status({
+        rubric: [
+          { id: "a", result: "pass" },
+          { id: "b", result: "pass" },
+        ],
+      }),
+    );
+    expect(out.status).toBe("approved");
+  });
+
+  it("returns 'rejected-with-remediation' when any result is fail", async () => {
+    const out = JSON.parse(
+      await handlers.decision_card_infer_status({
+        rubric: [
+          { id: "a", result: "pass" },
+          { id: "b", result: "fail" },
+          { id: "c", result: "partial" },
+        ],
+      }),
+    );
+    expect(out.status).toBe("rejected-with-remediation");
+  });
+
+  it("returns 'approved-with-conditions' on partial", async () => {
+    const out = JSON.parse(
+      await handlers.decision_card_infer_status({
+        rubric: [
+          { id: "a", result: "pass" },
+          { id: "b", result: "partial" },
+        ],
+      }),
+    );
+    expect(out.status).toBe("approved-with-conditions");
+  });
+
+  it("returns 'pending' for empty rubric", async () => {
+    const out = JSON.parse(await handlers.decision_card_infer_status({ rubric: [] }));
+    expect(out.status).toBe("pending");
+  });
+
+  it("returns 'pending' when every result is n/a", async () => {
+    const out = JSON.parse(
+      await handlers.decision_card_infer_status({
+        rubric: [
+          { id: "a", result: "n/a" },
+          { id: "b", result: "n/a" },
+        ],
+      }),
+    );
+    expect(out.status).toBe("pending");
+  });
+});
+
+const VALID_DECISION_CARD = {
+  decision_card_version: "0.1",
+  decision_id: "TEST-DEC-001",
+  issued_at: "2026-05-15T00:00:00Z",
+  buyer: { name: "Springfield USD", type: "school-district" },
+  decision: { status: "approved" },
+  subject: { vendor_name: "AcmeTutor" },
+  rationale: "Looks fine.",
+};
+
+describe("v0.6.0: decision_card_to_policy_bundle", () => {
+  it("approved card -> single allow-all policy", async () => {
+    const out = JSON.parse(
+      await handlers.decision_card_to_policy_bundle({
+        document_json: JSON.stringify(VALID_DECISION_CARD),
+      }),
+    );
+    expect(out.policies).toHaveLength(1);
+    expect(out.policies[0].default_effect).toBe("allow");
+  });
+
+  it("rejected card -> single deny-all policy", async () => {
+    const card = { ...VALID_DECISION_CARD, decision: { status: "rejected" } };
+    const out = JSON.parse(
+      await handlers.decision_card_to_policy_bundle({ document_json: JSON.stringify(card) }),
+    );
+    expect(out.policies[0].default_effect).toBe("deny");
+  });
+
+  it("approved-with-conditions emits one policy per condition", async () => {
+    const card = {
+      ...VALID_DECISION_CARD,
+      decision: { status: "approved-with-conditions" },
+      conditions: [
+        { id: "dpa-signed", description: "DPA must be on file" },
+        { id: "bias-audit", description: "Bias audit refreshed" },
+      ],
+    };
+    const out = JSON.parse(
+      await handlers.decision_card_to_policy_bundle({ document_json: JSON.stringify(card) }),
+    );
+    expect(out.policies).toHaveLength(2);
+    expect(out.policies[0].default_effect).toBe("deny");
+    expect(out.policies[0].rules[0].when_field).toBe("conditions_satisfied.dpa-signed");
+  });
+});
+
+describe("v0.6.0: decision_card_signature_check", () => {
+  it("reports no signature when signatures[] is absent", async () => {
+    const out = JSON.parse(
+      await handlers.decision_card_signature_check({
+        document_json: JSON.stringify(VALID_DECISION_CARD),
+      }),
+    );
+    expect(out.has_signature).toBe(false);
+  });
+
+  it("reports each signer with their method + key + timestamp", async () => {
+    const card = {
+      ...VALID_DECISION_CARD,
+      signatures: [
+        {
+          signer: "AVL Board",
+          signed_at: "2026-05-15T01:00:00Z",
+          method: "cryptographic",
+          key_uri: "https://buyer.example/keys/avl",
+        },
+      ],
+    };
+    const out = JSON.parse(
+      await handlers.decision_card_signature_check({ document_json: JSON.stringify(card) }),
+    );
+    expect(out.has_signature).toBe(true);
+    expect(out.signers[0].signer).toBe("AVL Board");
+    expect(out.signers[0].method).toBe("cryptographic");
+    expect(out.expected_canonical_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+});
+
+// ============================================================================
+// v0.6.0 — Incident remediation
+// ============================================================================
+
+const VALID_INCIDENT_CARD = {
+  incident_card_version: "0.1",
+  incident: {
+    id: "INC-2026-05-15-001",
+    title: "lookup_homework returned PII under prompt injection",
+    severity: "high",
+    categories: ["pii_leak", "prompt_injection_success"],
+    discovered_at: "2026-05-15T03:00:00Z",
+    disclosed_at: "2026-05-15T04:00:00Z",
+    status: "active",
+  },
+  published_by: {
+    name: "AcmeTutor Inc.",
+    role: "vendor",
+    contact_uri: "mailto:security@acmetutor.example",
+  },
+  published_at: "2026-05-15T04:30:00Z",
+  last_updated_at: "2026-05-15T04:30:00Z",
+  affected: {
+    vendor: "AcmeTutor Inc.",
+    products: ["AcmeTutor 3.0"],
+    tool_card_uris: ["https://acmetutor.example/.well-known/mcp-tools/lookup_homework.json"],
+    agent_card_uris: ["https://acmetutor.example/.well-known/agents/tutor.json"],
+  },
+  summary: "Crafted prompt extracted student PII",
+  root_cause: {
+    category: "prompt_injection",
+    description: "Tool call did not sanitize student records before return.",
+  },
+  harm: { severity_justification: "Student PII leaked", manifested: true },
+  mitigation: {
+    actions_taken: ["disabled tool", "rotated keys"],
+    permanent_fix: false,
+    rollout_status: "in_progress",
+  },
+};
+
+describe("v0.6.0: incident_affected_walk", () => {
+  it("returns one entry per affected URI plus vendor + product synth", async () => {
+    const out = JSON.parse(
+      await handlers.incident_affected_walk({
+        document_json: JSON.stringify(VALID_INCIDENT_CARD),
+      }),
+    );
+    expect(out.affected.length).toBe(4); // vendor + product + 1 tool + 1 agent
+    expect(out.counts_by_kind.vendor).toBe(1);
+    expect(out.counts_by_kind.product).toBe(1);
+    expect(out.counts_by_kind["tool-card"]).toBe(1);
+    expect(out.counts_by_kind["agent-card"]).toBe(1);
+  });
+});
+
+describe("v0.6.0: incident_remediation_plan", () => {
+  it("maps vendor + product to request_review, cards to revalidate", async () => {
+    const out = JSON.parse(
+      await handlers.incident_remediation_plan({
+        document_json: JSON.stringify(VALID_INCIDENT_CARD),
+      }),
+    );
+    expect(out.steps.length).toBe(4);
+    const byAction: Record<string, number> = {};
+    for (const step of out.steps) {
+      byAction[step.action] = (byAction[step.action] ?? 0) + 1;
+    }
+    expect(byAction.request_review).toBe(2);
+    expect(byAction.revalidate).toBe(2);
+  });
+
+  it("urgency matches incident severity", async () => {
+    const out = JSON.parse(
+      await handlers.incident_remediation_plan({
+        document_json: JSON.stringify(VALID_INCIDENT_CARD),
+      }),
+    );
+    expect(out.steps[0].urgency).toBe("high");
+  });
+
+  it("critical severity bumps every step to critical", async () => {
+    const card = {
+      ...VALID_INCIDENT_CARD,
+      incident: { ...VALID_INCIDENT_CARD.incident, severity: "critical" },
+    };
+    const out = JSON.parse(
+      await handlers.incident_remediation_plan({ document_json: JSON.stringify(card) }),
+    );
+    for (const step of out.steps) {
+      expect(step.urgency).toBe("critical");
+    }
+  });
+});
+
+// ============================================================================
+// v0.6.0 — Hash attestation
+// ============================================================================
+
+describe("v0.6.0: attestation_canonical_hash", () => {
+  it("hashes identical JSON values to the same digest regardless of key order", async () => {
+    const a = JSON.parse(
+      await handlers.attestation_canonical_hash({ body: { foo: 1, bar: "x" } }),
+    );
+    const b = JSON.parse(
+      await handlers.attestation_canonical_hash({ body: { bar: "x", foo: 1 } }),
+    );
+    expect(a.hash).toBe(b.hash);
+    expect(a.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it("different inputs hash differently", async () => {
+    const a = JSON.parse(
+      await handlers.attestation_canonical_hash({ body: { foo: 1 } }),
+    );
+    const b = JSON.parse(
+      await handlers.attestation_canonical_hash({ body: { foo: 2 } }),
+    );
+    expect(a.hash).not.toBe(b.hash);
+  });
+});
+
+describe("v0.6.0: attestation_inspect + attestation_verify", () => {
+  it("inspect validates the envelope shape", async () => {
+    const out = JSON.parse(
+      await handlers.attestation_inspect({
+        attestation: {
+          algorithm: "ed25519",
+          signed_hash: "sha256:" + "0".repeat(64),
+          signature: Buffer.alloc(64).toString("base64"),
+          key_url: "https://acme.example/keys/aeo",
+          signed_at: "2026-05-15T00:00:00Z",
+        },
+      }),
+    );
+    expect(out.valid_envelope).toBe(true);
+    expect(out.algorithm).toBe("ed25519");
+    expect(out.signature_length_bytes).toBe(64);
+  });
+
+  it("verify rejects bad algorithm immediately", async () => {
+    const out = JSON.parse(
+      await handlers.attestation_verify({
+        attestation: {
+          algorithm: "rsa-sha256",
+          signed_hash: "sha256:00",
+          signature: "AAAA",
+          key_url: "https://x/",
+          signed_at: "2026-05-15T00:00:00Z",
+        },
+        body: { foo: 1 },
+        public_key: "0".repeat(64),
+      }),
+    );
+    expect(out.ok).toBe(false);
+    expect(out.reason).toMatch(/unsupported algorithm/);
+  });
+
+  it("verify rejects hash mismatch before touching the signature", async () => {
+    const body = { foo: 1 };
+    const out = JSON.parse(
+      await handlers.attestation_verify({
+        attestation: {
+          algorithm: "ed25519",
+          signed_hash: "sha256:" + "f".repeat(64),
+          signature: Buffer.alloc(64).toString("base64"),
+          key_url: "https://x/",
+          signed_at: "2026-05-15T00:00:00Z",
+        },
+        body,
+        public_key: "0".repeat(64),
+      }),
+    );
+    expect(out.ok).toBe(false);
+    expect(out.reason).toBe("hash_mismatch");
+  });
+
+  it("verify ok=true for a real ed25519 signature it generates itself", async () => {
+    const { getPublicKeyAsync, signAsync } = await import("@noble/ed25519");
+    const privateKey = new Uint8Array(32).map((_, i) => (i + 1) % 256);
+    const publicKey = await getPublicKeyAsync(privateKey);
+
+    const body = { aeo_version: "0.1", entity: { id: "x", name: "Acme" } };
+    const hashOut = JSON.parse(
+      await handlers.attestation_canonical_hash({ body }),
+    );
+    const signedHash: string = hashOut.hash;
+    const sig = await signAsync(new TextEncoder().encode(signedHash), privateKey);
+
+    const out = JSON.parse(
+      await handlers.attestation_verify({
+        attestation: {
+          algorithm: "ed25519",
+          signed_hash: signedHash,
+          signature: Buffer.from(sig).toString("base64"),
+          key_url: "https://x/",
+          signed_at: "2026-05-15T00:00:00Z",
+        },
+        body,
+        public_key: Buffer.from(publicKey).toString("hex"),
+      }),
+    );
+    expect(out.ok).toBe(true);
+  });
+});
+
+// ============================================================================
+// v0.6.0 — Audit-stream events
+// ============================================================================
+
+describe("v0.6.0: audit_event_compose + audit_chain_verify", () => {
+  it("compose returns a complete event with a 64-char hash", async () => {
+    const out = JSON.parse(
+      await handlers.audit_event_compose({
+        event_id: 1,
+        kind: "decision_card_drafted",
+        source: "procurement-decision-api",
+        payload: { decision_id: "DEC-1" },
+      }),
+    );
+    expect(out.event_id).toBe(1);
+    expect(out.prev_hash).toBe("0".repeat(64));
+    expect(out.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(out.kind).toBe("decision_card_drafted");
+  });
+
+  it("compose rejects unknown event kinds", async () => {
+    const out = JSON.parse(
+      await handlers.audit_event_compose({
+        event_id: 1,
+        kind: "made_up_kind",
+        source: "x",
+      }),
+    );
+    expect(out.error).toMatch(/unknown event kind/);
+  });
+
+  it("chain_verify accepts a properly chained pair", async () => {
+    const e1 = JSON.parse(
+      await handlers.audit_event_compose({
+        event_id: 1,
+        kind: "request_allowed",
+        source: "policy-as-code-engine",
+      }),
+    );
+    const e2 = JSON.parse(
+      await handlers.audit_event_compose({
+        event_id: 2,
+        kind: "request_denied",
+        source: "policy-as-code-engine",
+        prev_hash: e1.hash,
+      }),
+    );
+    const out = JSON.parse(
+      await handlers.audit_chain_verify({ events: [e1, e2] }),
+    );
+    expect(out.valid).toBe(true);
+    expect(out.checked).toBe(2);
+  });
+
+  it("chain_verify detects a tampered payload", async () => {
+    const e1 = JSON.parse(
+      await handlers.audit_event_compose({
+        event_id: 1,
+        kind: "request_allowed",
+        source: "policy-as-code-engine",
+        payload: { x: 1 },
+      }),
+    );
+    e1.payload = { x: 999 }; // tamper
+    const out = JSON.parse(
+      await handlers.audit_chain_verify({ events: [e1] }),
+    );
+    expect(out.valid).toBe(false);
+    expect(out.first_break_at).toBe(1);
+  });
+
+  it("inspect surfaces self-consistency check", async () => {
+    const e1 = JSON.parse(
+      await handlers.audit_event_compose({
+        event_id: 1,
+        kind: "watch_drifted",
+        source: "aeo-validator-service",
+      }),
+    );
+    const out = JSON.parse(await handlers.audit_event_inspect({ event: e1 }));
+    expect(out.valid_envelope).toBe(true);
+    expect(out.self_consistent).toBe(true);
+    expect(out.known_kind).toBe(true);
+  });
+});
+
+// ============================================================================
+// v0.6.0 — Cross-spec Suite operations
+// ============================================================================
+
+describe("v0.6.0: suite_doc_detect_spec", () => {
+  it("detects every Suite spec by its *_version field", async () => {
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ aeo_version: "0.1" }, "aeo"],
+      [{ provenance_version: "0.1" }, "prompt-provenance"],
+      [{ agent_card_version: "0.1" }, "agent-card"],
+      [{ evidence_version: "0.1" }, "ai-evidence"],
+      [{ tool_card_version: "0.1" }, "tool-card"],
+      [{ tutor_card_version: "0.1" }, "tutor-card"],
+      [{ disclosure_version: "0.1" }, "student-ai-disclosure"],
+      [{ aup_version: "0.1" }, "classroom-aup"],
+      [{ clinical_ai_card_version: "0.1" }, "clinical-ai"],
+      [{ incident_card_version: "0.1" }, "incident-card"],
+      [{ decision_card_version: "0.1" }, "decision-card"],
+    ];
+    for (const [body, expected] of cases) {
+      const out = JSON.parse(await handlers.suite_doc_detect_spec({ body }));
+      expect(out.spec).toBe(expected);
+    }
+  });
+
+  it("returns unknown when no *_version field is recognised", async () => {
+    const out = JSON.parse(
+      await handlers.suite_doc_detect_spec({ body: { foo: "bar" } }),
+    );
+    expect(out.spec).toBe("unknown");
+  });
+});
+
+describe("v0.6.0: suite_doc_drift", () => {
+  it("no drift when bodies are identical", async () => {
+    const body = { aeo_version: "0.1", entity: { name: "Acme" } };
+    const out = JSON.parse(
+      await handlers.suite_doc_drift({ before: body, after: body }),
+    );
+    expect(out.drifted).toBe(false);
+    expect(out.added_fields).toEqual([]);
+    expect(out.removed_fields).toEqual([]);
+    expect(out.changed_fields).toEqual([]);
+  });
+
+  it("detects added + removed + changed fields", async () => {
+    const before = { aeo_version: "0.1", entity: { name: "Acme" } };
+    const after = { aeo_version: "0.1", entity: { name: "AcmeCorp" }, claims: [] };
+    const out = JSON.parse(
+      await handlers.suite_doc_drift({ before, after }),
+    );
+    expect(out.drifted).toBe(true);
+    expect(out.added_fields).toContain("claims");
+    expect(out.changed_fields).toContain("entity");
+    expect(out.removed_fields).toEqual([]);
+  });
+
+  it("detects spec change", async () => {
+    const before = { aeo_version: "0.1" };
+    const after = { agent_card_version: "0.1" };
+    const out = JSON.parse(
+      await handlers.suite_doc_drift({ before, after }),
+    );
+    expect(out.spec_changed).toBe(true);
+    expect(out.spec_before).toBe("aeo");
+    expect(out.spec_after).toBe("agent-card");
   });
 });

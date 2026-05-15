@@ -2,6 +2,76 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.0] - 2026-05-15
+
+**Implementation-tooling preview** — the unified server now wraps the v0.1.0
+Kinetic Gain implementation stack (procurement-decision-api,
+policy-as-code-engine, hash-attestation-rs, audit-stream-py,
+incident-correlation-rs, aeo-validator-service) at preview scale. Every new
+tool is deterministic and read-only — there's no LLM-in-the-loop math and no
+HTTP round trip.
+
+### Added — 13 new tools (47 → 60 total across 11 specs + 5 cross-cutting ops)
+
+**Decision Intelligence preview** (mirrors procurement-decision-api +
+policy-as-code-engine):
+
+- `decision_card_infer_status` — given a rubric, returns the right
+  `decision.status` (any `fail` → `rejected-with-remediation`; any `partial` /
+  `pass-with-condition` → `approved-with-conditions`; all `pass` → `approved`;
+  empty / all `n/a` → `pending`).
+- `decision_card_to_policy_bundle` — Decision Card → PolicyBundle preview
+  matching `policy-as-code-engine`'s `POST /bundles/from-decision-card`.
+- `decision_card_signature_check` — structural signature audit + canonical
+  hash (pair with `attestation_verify` for cryptographic verification).
+
+**Incident remediation** (mirrors incident-correlation-rs single-hop):
+
+- `incident_affected_walk` — flatten an Incident Card's `affected` block into
+  `[{ uri, kind }]`. Seed list for full Suite-graph BFS.
+- `incident_remediation_plan` — per-URI Action + Urgency. `vendor` /
+  `product` → `request_review`; agent / tool / tutor-card → `revalidate`.
+  Urgency table follows incident severity.
+
+**Hash attestation** (matches `hash-attestation-rs` wire format):
+
+- `attestation_canonical_hash` — `sha256:<hex>` over canonical JSON of any
+  value. Same convention every other implementation repo uses.
+- `attestation_verify` — verify an ed25519 envelope (algorithm /
+  signed_hash / signature / key_url / signed_at) against a body + public
+  key. Public key accepted as 64-char hex or base64.
+- `attestation_inspect` — structural validation of an Attestation envelope.
+
+**Audit-stream events** (matches `audit-stream-py` wire format):
+
+- `audit_event_compose` — build a ready-to-POST GovernanceEvent (event_id,
+  prev_hash linkage, computed hash). Rejects unknown event kinds.
+- `audit_chain_verify` — walk an event array, verify monotonic event_id +
+  prev_hash linkage + self-consistency. Returns the same shape as
+  audit-stream-py's `GET /verify`.
+- `audit_event_inspect` — single-event validation with self-consistency check.
+
+**Cross-spec operations**:
+
+- `suite_doc_detect_spec` — detect spec by `*_version` field across all 11
+  Suite specs.
+- `suite_doc_drift` — structural diff between two doc versions (matches the
+  `DriftReport` shape `aeo-validator-service` emits for watch rechecks).
+
+### Added
+
+- `canonicalJsonSha256` helper in `src/common.ts` — distinct from existing
+  `canonicalSha256` (which is text-content / AI Evidence convention). The new
+  one is the structural / parsed-value convention used by the implementation
+  stack.
+- `@noble/ed25519` v2 as a runtime dep for signature verification.
+
+### Quality
+
+- 126 tests passing (96 pre-existing + 30 new across the 13 v0.6 tools).
+- TypeScript strict clean.
+- CI matrix Node 20 + 22 unchanged.
+
 ## [0.5.2] - 2026-05-14
 
 ### Added — Spec #11

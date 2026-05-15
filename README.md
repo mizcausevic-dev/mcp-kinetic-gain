@@ -1,6 +1,6 @@
 # mcp-kinetic-gain
 
-One **MCP server**, all eleven [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **47 tools** across AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure (HealthTech), AI Incident Card, and AI Procurement Decision Card (the buyer-side artifact).
+One **MCP server**, all eleven [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **60 tools** (47 spec + 13 implementation-preview, v0.6.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card — plus hash attestation (ed25519), audit-stream event composition + chain verification, cross-spec drift detection, Decision Intelligence preview (Decision Card → PolicyBundle, rubric status inference, incident remediation planning).
 
 This is the unified read-side companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders any of the 11 specs for humans, this server exposes them as callable tools for agents.
 
@@ -31,7 +31,7 @@ Add to your `claude_desktop_config.json` (macOS: `~/Library/Application Support/
 }
 ```
 
-Restart Claude. All 47 tools appear in the tools panel. Try:
+Restart Claude. All 60 tools appear in the tools panel. Try:
 
 > *"Use aeo_inspect on https://mizcausevic-dev.github.io to summarize the entity declaration, then use ai_evidence_verify_hash to check the content_hash of an evidence object against my candidate text."*
 

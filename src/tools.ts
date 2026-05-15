@@ -1,16 +1,28 @@
 /**
  * MCP tool descriptors for every spec in the Kinetic Gain Protocol Suite.
- * 43 tools total across 10 specs (v0.5.0):
- *   AEO Protocol            (4)
- *   Prompt Provenance       (3)
- *   Agent Cards             (4)
- *   AI Evidence Format      (3)
- *   MCP Tool Cards          (4)
- *   AI Tutor Cards          (6) — EdTech extension
- *   Student AI Disclosure   (5) — EdTech extension
- *   Classroom AI AUP        (5) — EdTech extension (closes the EdTech trio)
- *   Clinical AI Disclosure  (4) — HealthTech extension
- *   AI Incident Card        (5) — cross-cutting (includes index_fetch)
+ *
+ * 60 tools total across 11 specs + 5 cross-cutting operations (v0.6.0):
+ *   AEO Protocol               (4)
+ *   Prompt Provenance          (3)
+ *   Agent Cards                (4)
+ *   AI Evidence Format         (3)
+ *   MCP Tool Cards             (4)
+ *   AI Tutor Cards             (6)  — EdTech extension
+ *   Student AI Disclosure      (5)  — EdTech extension
+ *   Classroom AI AUP           (5)  — EdTech extension (closes the EdTech trio)
+ *   Clinical AI Disclosure     (4)  — HealthTech extension
+ *   AI Incident Card           (7)  — 5 base + 2 new in v0.6 (affected_walk, remediation_plan)
+ *   AI Procurement Decision    (7)  — 4 base + 3 new in v0.6 (infer_status, to_policy_bundle, signature_check)
+ *   ─── cross-cutting ops (new in v0.6.0) ─────────────────────────────
+ *   Hash attestation           (3)  — canonical_hash, verify, inspect
+ *   Audit-stream events        (3)  — compose, chain_verify, inspect
+ *   Cross-spec operations      (2)  — detect_spec, drift
+ *
+ * v0.6.0 wraps the new implementation tooling (procurement-decision-api,
+ * policy-as-code-engine, hash-attestation-rs, audit-stream-py,
+ * incident-correlation-rs, aeo-validator-service) at preview scale so a
+ * Claude conversation can answer "what would those services compute?"
+ * without an HTTP round trip.
  */
 export const toolDescriptors = [
   // --------------------------------------------------------------------------
@@ -593,6 +605,233 @@ export const toolDescriptors = [
       properties: {
         url: { type: "string", format: "uri" },
         document_json: { type: "string" },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // v0.6.0 — Decision Intelligence preview tools
+  // --------------------------------------------------------------------------
+  {
+    name: "decision_card_infer_status",
+    description:
+      "Given a rubric, infer the right `decision.status`. Mirrors procurement-decision-api's rubric engine: any 'fail' -> 'rejected-with-remediation'; any 'partial' or 'pass-with-condition' -> 'approved-with-conditions'; all 'pass' -> 'approved'; empty or all 'n/a' -> 'pending'.",
+    inputSchema: {
+      type: "object",
+      required: ["rubric"],
+      additionalProperties: false,
+      properties: {
+        rubric: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["id", "result"],
+            additionalProperties: true,
+            properties: {
+              id: { type: "string" },
+              result: {
+                type: "string",
+                enum: ["pass", "pass-with-condition", "partial", "fail", "n/a"],
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: "decision_card_to_policy_bundle",
+    description:
+      "Translate a Decision Card into the PolicyBundle that policy-as-code-engine's POST /bundles/from-decision-card would generate. Read-only preview. 'approved' -> allow-all; 'rejected*' / 'withdrawn' / 'expired' / 'pending' -> deny-all; 'approved-with-conditions' -> one policy per condition (deny-by-default, allow only when conditions_satisfied.{id} is true).",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "decision_card_signature_check",
+    description:
+      "Structural check on a Decision Card's signatures[] block: count signers, show their method/key/timestamp, and return the canonical-JSON hash of the card body (excluding signatures) so a caller can pair this with attestation_verify for cryptographic checking.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // v0.6.0 — AI Incident Card remediation tools
+  // --------------------------------------------------------------------------
+  {
+    name: "incident_affected_walk",
+    description:
+      "Walk an Incident Card's `affected` block and return every referenced Suite document as { uri, kind }. Useful as the seed list for incident-correlation-rs or fan-out validation via aeo-validator-service.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "incident_remediation_plan",
+    description:
+      "Map each affected URI in an Incident Card to a recommended Action + Urgency. Single-hop preview of what incident-correlation-rs.correlate() would produce: agent/tutor/tool-card -> revalidate; vendor/product -> request_review. Urgency follows severity.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        url: { type: "string", format: "uri" },
+        document_json: { type: "string" },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // v0.6.0 — Hash attestation tools (matches hash-attestation-rs wire format)
+  // --------------------------------------------------------------------------
+  {
+    name: "attestation_canonical_hash",
+    description:
+      "Compute the SHA-256 canonical-JSON hash of an arbitrary value (sorted keys, no whitespace). This is the structural hash convention used by procurement-decision-api, aeo-validator-service, aeo-graph-explorer-rs, and hash-attestation-rs. Identical JSON values produce identical hashes regardless of original whitespace or key order.",
+    inputSchema: {
+      type: "object",
+      required: ["body"],
+      additionalProperties: false,
+      properties: {
+        body: { description: "Any JSON value to hash." },
+      },
+    },
+  },
+  {
+    name: "attestation_verify",
+    description:
+      "Verify an ed25519 Attestation envelope (algorithm/signed_hash/signature/key_url/signed_at) against a body and a public key. Recomputes the canonical hash, checks it matches signed_hash, then verifies the ed25519 signature over the hash string. Returns { ok, reason? }. Public key accepted as 64-char hex or base64.",
+    inputSchema: {
+      type: "object",
+      required: ["attestation", "body", "public_key"],
+      additionalProperties: false,
+      properties: {
+        attestation: {
+          type: "object",
+          required: ["algorithm", "signed_hash", "signature", "key_url", "signed_at"],
+          properties: {
+            algorithm: { type: "string" },
+            signed_hash: { type: "string" },
+            signature: { type: "string" },
+            key_url: { type: "string" },
+            signed_at: { type: "string" },
+          },
+        },
+        body: { description: "The body the attestation was minted over." },
+        public_key: {
+          type: "string",
+          description: "32-byte ed25519 verifying key as 64-char hex OR base64.",
+        },
+      },
+    },
+  },
+  {
+    name: "attestation_inspect",
+    description:
+      "Pretty-print an Attestation envelope with structural validation: confirms every required field is present, reports the decoded signature byte-length (should be 64), and surfaces the key_url + signed_at fields a caller would use to find the matching public key.",
+    inputSchema: {
+      type: "object",
+      required: ["attestation"],
+      additionalProperties: false,
+      properties: {
+        attestation: { type: "object" },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // v0.6.0 — Audit-stream governance event tools
+  // --------------------------------------------------------------------------
+  {
+    name: "audit_event_compose",
+    description:
+      "Build a ready-to-POST audit-stream-py GovernanceEvent: assigns event_id, computes the canonical hash, links to prev_hash (defaults to 64 zeros for event #1). Kind must be one of the 19 declared event kinds (decision_card_drafted, watch_drifted, request_denied, etc., plus 'other').",
+    inputSchema: {
+      type: "object",
+      required: ["event_id", "kind", "source"],
+      additionalProperties: false,
+      properties: {
+        event_id: { type: "integer", minimum: 1 },
+        kind: { type: "string" },
+        source: { type: "string" },
+        payload: { type: "object" },
+        prev_hash: { type: "string", description: "64-char hex; defaults to 64 zeros." },
+        timestamp: { type: "string", description: "Optional ISO-8601; defaults to now." },
+      },
+    },
+  },
+  {
+    name: "audit_chain_verify",
+    description:
+      "Walk an array of GovernanceEvents top-to-bottom and verify the hash chain: monotonic event_id, prev_hash linkage, self-consistency of each event's hash. Returns { valid, checked, first_break_at, reason } — the same shape audit-stream-py's GET /verify endpoint emits.",
+    inputSchema: {
+      type: "object",
+      required: ["events"],
+      additionalProperties: false,
+      properties: {
+        events: {
+          type: "array",
+          items: { type: "object" },
+        },
+      },
+    },
+  },
+  {
+    name: "audit_event_inspect",
+    description:
+      "Pretty-print one GovernanceEvent with structural validation: required fields, known/unknown kind, payload key list, and self-consistency check (does the event's `hash` match the recomputed canonical hash of the body?).",
+    inputSchema: {
+      type: "object",
+      required: ["event"],
+      additionalProperties: false,
+      properties: {
+        event: { type: "object" },
+      },
+    },
+  },
+
+  // --------------------------------------------------------------------------
+  // v0.6.0 — Cross-spec Suite operations
+  // --------------------------------------------------------------------------
+  {
+    name: "suite_doc_detect_spec",
+    description:
+      "Detect which Kinetic Gain Suite spec a JSON document is by sniffing its top-level *_version field. Returns { spec, version_field, version }. Recognises all 11 specs; returns spec='unknown' for anything else.",
+    inputSchema: {
+      type: "object",
+      required: ["body"],
+      additionalProperties: false,
+      properties: {
+        body: { type: "object" },
+      },
+    },
+  },
+  {
+    name: "suite_doc_drift",
+    description:
+      "Structural diff between two versions of the same Suite document. Returns { drifted, spec_before, spec_after, spec_changed, content_hash_before, content_hash_after, added_fields, removed_fields, changed_fields } — mirrors the DriftReport shape aeo-validator-service emits for watch rechecks.",
+    inputSchema: {
+      type: "object",
+      required: ["before", "after"],
+      additionalProperties: false,
+      properties: {
+        before: { type: "object" },
+        after: { type: "object" },
       },
     },
   },

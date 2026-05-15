@@ -2,6 +2,20 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
+ * v0.6.0: Adds 13 implementation-tooling preview tools. Now 60 tools across
+ *   11 specs + 5 cross-cutting operations. New tools wrap the v0.1.0
+ *   implementation stack (procurement-decision-api, policy-as-code-engine,
+ *   hash-attestation-rs, audit-stream-py, incident-correlation-rs,
+ *   aeo-validator-service) at preview scale — read-only, deterministic, no
+ *   HTTP round trip required. Categories:
+ *     - Decision Intelligence preview: decision_card_infer_status,
+ *       decision_card_to_policy_bundle, decision_card_signature_check
+ *     - Incident remediation: incident_affected_walk, incident_remediation_plan
+ *     - Hash attestation: attestation_canonical_hash, attestation_verify,
+ *       attestation_inspect
+ *     - Audit-stream: audit_event_compose, audit_chain_verify, audit_event_inspect
+ *     - Cross-spec: suite_doc_detect_spec, suite_doc_drift
+ *
  * v0.5.2: Adds AI Procurement Decision Card support (spec #11). Now 47 tools
  *   across 11 specs. Decision Card is the buyer-side artifact that closes the
  *   loop: records the outcome of a procurement review of vendor declarations,
@@ -104,19 +118,41 @@ import {
 } from "./handlers/clinical-ai.js";
 
 import {
+  handleIncidentAffectedWalk,
   handleIncidentFetch,
   handleIncidentIndexFetch,
   handleIncidentInspect,
+  handleIncidentRemediationPlan,
   handleIncidentValidate,
   handleIncidentWellKnownUrl,
 } from "./handlers/ai-incident.js";
 
 import {
   handleDecisionCardFetch,
+  handleDecisionCardInferStatus,
   handleDecisionCardInspect,
+  handleDecisionCardSignatureCheck,
+  handleDecisionCardToPolicyBundle,
   handleDecisionCardValidate,
   handleDecisionCardWellKnownUrl,
 } from "./handlers/decision-card.js";
+
+import {
+  handleAttestationCanonicalHash,
+  handleAttestationInspect,
+  handleAttestationVerify,
+} from "./handlers/attestation.js";
+
+import {
+  handleAuditChainVerify,
+  handleAuditEventCompose,
+  handleAuditEventInspect,
+} from "./handlers/audit-event.js";
+
+import {
+  handleSuiteDocDetectSpec,
+  handleSuiteDocDrift,
+} from "./handlers/suite-ops.js";
 
 export const handlers: Record<string, (args: any) => Promise<string>> = {
   // AEO
@@ -177,11 +213,34 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   decision_card_fetch: handleDecisionCardFetch,
   decision_card_validate: handleDecisionCardValidate,
   decision_card_inspect: handleDecisionCardInspect,
+
+  // v0.6.0 — Decision Intelligence preview
+  decision_card_infer_status: handleDecisionCardInferStatus,
+  decision_card_to_policy_bundle: handleDecisionCardToPolicyBundle,
+  decision_card_signature_check: handleDecisionCardSignatureCheck,
+
+  // v0.6.0 — Incident remediation
+  incident_affected_walk: handleIncidentAffectedWalk,
+  incident_remediation_plan: handleIncidentRemediationPlan,
+
+  // v0.6.0 — Hash attestation
+  attestation_canonical_hash: handleAttestationCanonicalHash,
+  attestation_verify: handleAttestationVerify,
+  attestation_inspect: handleAttestationInspect,
+
+  // v0.6.0 — Audit-stream events
+  audit_event_compose: handleAuditEventCompose,
+  audit_chain_verify: handleAuditChainVerify,
+  audit_event_inspect: handleAuditEventInspect,
+
+  // v0.6.0 — Cross-spec operations
+  suite_doc_detect_spec: handleSuiteDocDetectSpec,
+  suite_doc_drift: handleSuiteDocDrift,
 };
 
 export function buildServer(): Server {
   const server = new Server(
-    { name: "mcp-kinetic-gain", version: "0.5.2" },
+    { name: "mcp-kinetic-gain", version: "0.6.0" },
     { capabilities: { tools: {} } },
   );
 

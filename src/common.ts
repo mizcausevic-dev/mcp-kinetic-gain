@@ -47,6 +47,49 @@ export function pretty(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+/**
+ * SHA-256 over canonical JSON of a parsed value: sorted object keys,
+ * no whitespace, UTF-8. This is the **structural** hash convention used
+ * across the Kinetic Gain implementation stack (procurement-decision-api,
+ * aeo-validator-service, aeo-graph-explorer-rs, hash-attestation-rs).
+ *
+ * Distinct from `canonicalSha256()` above, which hashes a *text content*
+ * string after line-ending normalization (the AI Evidence / Prompt
+ * Provenance convention).
+ *
+ * Identical JSON values produce identical hashes regardless of how the
+ * input was originally serialised:
+ *   { "foo": 1, "bar": 2 }  and  { "bar": 2, "foo": 1 }  -> same hash.
+ */
+export function canonicalJsonSha256(value: unknown): string {
+  const canonical = canonicalJson(value);
+  const hex = createHash("sha256").update(canonical, "utf8").digest("hex");
+  return `sha256:${hex}`;
+}
+
+/** Internal — canonical JSON: sorted keys, no whitespace. */
+function canonicalJson(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") {
+    // JSON.stringify of a non-finite number is "null" — preserve that.
+    if (!Number.isFinite(value)) return "null";
+    return JSON.stringify(value);
+  }
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return "[" + value.map(canonicalJson).join(",") + "]";
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    const parts = keys.map((k) => JSON.stringify(k) + ":" + canonicalJson(obj[k]));
+    return "{" + parts.join(",") + "}";
+  }
+  // undefined / symbol / function — JSON doesn't carry them; treat as null.
+  return "null";
+}
+
 export function errorJson(error: string, details: Record<string, unknown> = {}): string {
   return pretty({ error, ...details });
 }

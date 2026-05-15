@@ -147,3 +147,145 @@ export async function handleIncidentIndexFetch(args: { origin: string }): Promis
     incidents_sorted_by_disclosed_at_desc: sortedIds,
   });
 }
+
+// ---------------------------------------------------------------------------
+// v0.6.0 — incident remediation tools (mirror incident-correlation-rs at
+// single-hop preview scale; for full Suite-graph BFS use the Rust crate).
+// ---------------------------------------------------------------------------
+
+interface AffectedRef {
+  uri: string;
+  kind: "agent-card" | "tutor-card" | "tool-card" | "vendor" | "product";
+}
+
+function collectAffected(card: AiIncidentCard): AffectedRef[] {
+  const out: AffectedRef[] = [];
+  out.push({ uri: `vendor:${card.affected.vendor}`, kind: "vendor" });
+  for (const product of card.affected.products ?? []) {
+    out.push({ uri: `product:${card.affected.vendor}/${product}`, kind: "product" });
+  }
+  for (const u of card.affected.agent_card_uris ?? []) out.push({ uri: u, kind: "agent-card" });
+  for (const u of card.affected.tutor_card_uris ?? []) out.push({ uri: u, kind: "tutor-card" });
+  for (const u of card.affected.tool_card_uris ?? []) out.push({ uri: u, kind: "tool-card" });
+  return out;
+}
+
+/**
+ * Walk an Incident Card's `affected` block and return every referenced
+ * Suite document by URI + kind. Useful as the seed list for
+ * `incident-correlation-rs` or for fan-out validation via
+ * `aeo-validator-service`.
+ */
+export async function handleIncidentAffectedWalk(args: {
+  url?: string;
+  document_json?: string;
+}): Promise<string> {
+  const card = await loadIncident(args);
+  if ("error" in card) return pretty(card);
+  const affected = collectAffected(card);
+  return pretty({
+    incident_id: card.incident.id,
+    severity: card.incident.severity,
+    vendor: card.affected.vendor,
+    affected_count: affected.length,
+    affected,
+    counts_by_kind: countBy(affected.map((a) => a.kind)),
+  });
+}
+
+/**
+ * Map each affected URI to a recommended Action + Urgency. Mirrors the
+ * `incident-correlation-rs.correlate()` single-hop logic:
+ *
+ *   tool-card  -> revalidate (rerun aeo-validator-service watches + audit tool calls)
+ *   agent-card -> revalidate
+ *   tutor-card -> revalidate
+ *   product    -> request_review (procurement reopens the Decision Card)
+ *   vendor     -> request_review
+ *
+ * Urgency table: critical -> critical, high -> high, medium -> normal, low -> low.
+ */
+export async function handleIncidentRemediationPlan(args: {
+  url?: string;
+  document_json?: string;
+}): Promise<string> {
+  const card = await loadIncident(args);
+  if ("error" in card) return pretty(card);
+
+  const baseUrgency = severityToUrgency(card.incident.severity);
+  const affected = collectAffected(card);
+  if (affected.length === 0) {
+    return pretty({
+      incident_id: card.incident.id,
+      severity: card.incident.severity,
+      steps: [],
+      summary: "no affected documents declared",
+    });
+  }
+
+  const steps = affected.map((a) => {
+    const action =
+      a.kind === "vendor" || a.kind === "product" ? "request_review" : "revalidate";
+    return {
+      document_uri: a.uri,
+      kind: a.kind,
+      action,
+      urgency: baseUrgency,
+      rationale: rationaleFor(action, a.kind, card.incident.title),
+    };
+  });
+
+  return pretty({
+    incident_id: card.incident.id,
+    title: card.incident.title,
+    severity: card.incident.severity,
+    steps,
+    summary: `${steps.length} step(s) recommended; severity=${card.incident.severity}`,
+  });
+}
+
+async function loadIncident(args: {
+  url?: string;
+  document_json?: string;
+}): Promise<AiIncidentCard | { error: string }> {
+  try {
+    if (args.document_json) {
+      return aiIncidentCardSchema.parse(JSON.parse(args.document_json));
+    }
+    if (args.url) {
+      return aiIncidentCardSchema.parse(await fetchJson(args.url));
+    }
+    return { error: "must provide either `url` or `document_json`" };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function severityToUrgency(sev: AiIncidentCard["incident"]["severity"]): string {
+  switch (sev) {
+    case "critical":
+      return "critical";
+    case "high":
+      return "high";
+    case "medium":
+      return "normal";
+    case "low":
+    default:
+      return "low";
+  }
+}
+
+function rationaleFor(action: string, kind: AffectedRef["kind"], title: string): string {
+  if (action === "request_review") {
+    return `Bring forward a fresh procurement review for ${kind}. Incident: ${title}`;
+  }
+  return `Re-fetch + re-validate ${kind} via aeo-validator-service. Incident: ${title}`;
+}
+
+function countBy<T extends string>(items: T[]): Record<T, number> {
+  const out: Partial<Record<T, number>> = {};
+  for (const x of items) {
+    out[x] = (out[x] ?? 0) + 1;
+  }
+  return out as Record<T, number>;
+}
