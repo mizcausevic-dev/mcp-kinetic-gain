@@ -150,6 +150,12 @@ import {
 } from "./handlers/audit-event.js";
 
 import {
+  handleAuditChainVerifyLive,
+  handleAuditEventEmit,
+  handleAuditEventsQuery,
+} from "./handlers/audit-stream-live.js";
+
+import {
   handleSuiteDocDetectSpec,
   handleSuiteDocDrift,
 } from "./handlers/suite-ops.js";
@@ -228,10 +234,15 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   attestation_verify: handleAttestationVerify,
   attestation_inspect: handleAttestationInspect,
 
-  // v0.6.0 — Audit-stream events
+  // v0.6.0 — Audit-stream events (offline / synthetic)
   audit_event_compose: handleAuditEventCompose,
   audit_chain_verify: handleAuditChainVerify,
   audit_event_inspect: handleAuditEventInspect,
+
+  // v0.7.0 — Audit-stream events (live; talks to running audit-stream-py)
+  audit_event_emit: handleAuditEventEmit,
+  audit_events_query: handleAuditEventsQuery,
+  audit_chain_verify_live: handleAuditChainVerifyLive,
 
   // v0.6.0 — Cross-spec operations
   suite_doc_detect_spec: handleSuiteDocDetectSpec,

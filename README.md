@@ -1,6 +1,6 @@
 # mcp-kinetic-gain
 
-One **MCP server**, all eleven [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **60 tools** (47 spec + 13 implementation-preview, v0.6.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card — plus hash attestation (ed25519), audit-stream event composition + chain verification, cross-spec drift detection, Decision Intelligence preview (Decision Card → PolicyBundle, rubric status inference, incident remediation planning).
+One **MCP server**, all eleven [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **63 tools** (47 spec + 16 implementation-preview, v0.7.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card — plus hash attestation (ed25519), audit-stream event composition + chain verification (offline AND live against a running audit-stream-py via `AUDIT_STREAM_URL`), cross-spec drift detection, Decision Intelligence preview (Decision Card → PolicyBundle, rubric status inference, incident remediation planning). **New in v0.7.0**: `audit_event_emit`, `audit_events_query`, `audit_chain_verify_live` — Claude can now read and write to the audit-stream spine from inside a chat.
 
 This is the unified read-side companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders any of the 11 specs for humans, this server exposes them as callable tools for agents.
 
@@ -31,7 +31,7 @@ Add to your `claude_desktop_config.json` (macOS: `~/Library/Application Support/
 }
 ```
 
-Restart Claude. All 60 tools appear in the tools panel. Try:
+Restart Claude. All 63 tools appear in the tools panel. Try:
 
 > *"Use aeo_inspect on https://mizcausevic-dev.github.io to summarize the entity declaration, then use ai_evidence_verify_hash to check the content_hash of an evidence object against my candidate text."*
 

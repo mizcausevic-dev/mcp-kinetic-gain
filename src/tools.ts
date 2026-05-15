@@ -806,6 +806,76 @@ export const toolDescriptors = [
   },
 
   // --------------------------------------------------------------------------
+  // v0.7.0 — Live audit-stream tools (talk to a running audit-stream-py)
+  // --------------------------------------------------------------------------
+  {
+    name: "audit_event_emit",
+    description:
+      "POST one governance event to a running audit-stream-py instance (env var AUDIT_STREAM_URL). The server assigns event_id/timestamp/prev_hash/hash; the caller provides kind + source + payload. Use when Claude needs to record a governance moment from inside a chat (e.g. a manual override, a human-approved exception, an out-of-band incident). Returns the persisted event as audit-stream-py wrote it. Requires AUDIT_STREAM_URL in the MCP server's environment; returns a structured error otherwise.",
+    inputSchema: {
+      type: "object",
+      required: ["kind", "source"],
+      additionalProperties: false,
+      properties: {
+        kind: {
+          type: "string",
+          description:
+            "Event kind. Conventionally snake_case; matches the event kinds emitted by Kinetic Gain producers (decision_card_drafted, request_denied, breaker_opened, slo_burn_started, attestation_failed, watch_drifted, ...). Use 'other' for ad-hoc kinds not yet in the producer catalogue.",
+        },
+        source: {
+          type: "string",
+          description:
+            "Who's emitting. Use a stable producer identifier (e.g. 'mcp-kinetic-gain', 'manual', or one of the suite producer names).",
+        },
+        payload: {
+          type: "object",
+          description: "Free-form structured payload to record alongside kind+source.",
+        },
+      },
+    },
+  },
+  {
+    name: "audit_events_query",
+    description:
+      "GET recent governance events from a running audit-stream-py instance (env var AUDIT_STREAM_URL), with optional server-side filters. Use to surface the last N denies, attestation failures, breaker trips, contract incompatibilities, or any other governance moment a user is investigating. Returns the events array plus a `count` field. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        kind: {
+          type: "string",
+          description: "Filter by event kind (exact match). Omit to get all kinds.",
+        },
+        source: {
+          type: "string",
+          description: "Filter by source (exact match). Omit to get all sources.",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          description: "Cap the number of events returned. Defaults to the server's own cap.",
+        },
+        since_id: {
+          type: "integer",
+          minimum: 0,
+          description:
+            "Return only events with event_id > since_id. Use for incremental tailing without re-fetching the whole chain.",
+        },
+      },
+    },
+  },
+  {
+    name: "audit_chain_verify_live",
+    description:
+      "Ask a running audit-stream-py instance to walk its own chain end-to-end and report whether it's still intact. This is the canonical compliance answer — covers the FULL server-side history, not just events the agent has in context. Returns the same shape as the local audit_chain_verify tool (valid, checked, first_break_at, reason) but for the live chain. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {},
+    },
+  },
+
+  // --------------------------------------------------------------------------
   // v0.6.0 — Cross-spec Suite operations
   // --------------------------------------------------------------------------
   {
