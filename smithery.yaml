@@ -1,0 +1,22 @@
+# Smithery deployment config — https://smithery.ai/docs
+# Local stdio server distributed via npm; Smithery runs it through npx.
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      auditStreamUrl:
+        type: string
+        title: Audit Stream URL
+        description: >-
+          Optional URL of a running audit-stream-py instance. When set, the live
+          audit-stream tools (audit_event_emit, audit_events_query,
+          audit_chain_verify_live) are enabled. Leave empty for offline mode.
+    required: []
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'mcp-kinetic-gain'],
+      env: config.auditStreamUrl ? { AUDIT_STREAM_URL: config.auditStreamUrl } : {}
+    })
+  exampleConfig: {}
