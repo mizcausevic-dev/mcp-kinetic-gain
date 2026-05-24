@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here.
 
+## [0.7.1] - 2026-05-24
+
+**Registry distribution.** Metadata-only release that makes the server
+publishable to the MCP registries.
+
+### Added
+
+- `mcpName` field in `package.json` (`io.github.mizcausevic-dev/mcp-kinetic-gain`)
+  — the npm-package ownership marker the MCP Registry validates on publish.
+- `server.json` (official MCP Registry manifest), `smithery.yaml`, `glama.json`,
+  `llms-install.md`, and `docs/REGISTRIES.md` — see the repo root.
+
+No tool or behavior changes from 0.7.0.
+
+## [0.7.0] - 2026-05-20
+
+**Live audit-stream.** Adds `audit_event_emit`, `audit_events_query`, and
+`audit_chain_verify_live` so an agent can read and write the hash-chained
+audit-stream spine directly (against a running `audit-stream-py` via
+`AUDIT_STREAM_URL`), alongside the offline audit tools. 63 tools total.
+
 ## [0.6.0] - 2026-05-15
 
 **Implementation-tooling preview** — the unified server now wraps the v0.1.0
