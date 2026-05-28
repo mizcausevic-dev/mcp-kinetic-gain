@@ -1,156 +1,37 @@
-# MCP registry distribution — fire-ready submission guide
+# MCP registry distribution — current state + the one remaining submission
 
-`mcp-kinetic-gain` (v0.7.1, 63 tools, npm package
-[`mcp-kinetic-gain`](https://www.npmjs.com/package/mcp-kinetic-gain)) is already
-discoverable via auto-scrapers (e.g. mcpmarket.com). This guide is the
-**stage-up sheet** for the five registries you control. The in-repo metadata is
-done — the steps below are the auth-gated publish/claim actions that need
-Miz's GitHub account at the keyboard. Every block is copy-paste-ready.
+`mcp-kinetic-gain` v0.7.1 (63 tools, 11 specs, stdio over
+[`npm i -g mcp-kinetic-gain`](https://www.npmjs.com/package/mcp-kinetic-gain))
+is already in the registries that fit a stdio+npm server. This doc tracks
+**what's live, what was pruned, and what's still outstanding** so the lane
+doesn't drift back into "do all five again" thinking.
 
-## Pre-flight (already done)
+## Status (verified 2026-05-28)
 
-| Artifact | Location | State |
+| Registry | State | Notes |
 | --- | --- | --- |
-| Official Registry manifest | `server.json` | v0.7.1, namespace `io.github.mizcausevic-dev/*` |
-| Smithery config | `smithery.yaml` | stdio + optional `AUDIT_STREAM_URL` |
-| Glama maintainer claim | `glama.json` | `maintainers: ["mizcausevic-dev"]` |
-| Cline AI-readable install | `llms-install.md` | one config block + audit-stream env note |
-| Marketplace logo (400×400) | `assets/logo-400.png` | required for Cline submission |
-| npm publish | npm registry | v0.7.1 live; `mcpName` field set |
+| Official MCP Registry | ✅ **LIVE** | `io.github.mizcausevic-dev/mcp-kinetic-gain` v0.7.1, `status: active`, published 2026-05-24. Verified via `GET /v0/servers?search=mcp-kinetic-gain`. |
+| npm | ✅ **LIVE** | v0.7.1, `mcpName` set. |
+| Cline marketplace | 🕐 **SUBMITTED** | Issue [cline/mcp-marketplace#1661](https://github.com/cline/mcp-marketplace/issues/1661) — open, awaiting Cline team review. |
+| Glama | ⛔ **PRUNED** | Throws 500s + gates behind "Add billing / Top up balance". Not worth the friction. `glama.json` stays in repo for a future re-evaluation. |
+| Smithery | ⛔ **PRUNED** | Their submit form requires a hosted HTTPS MCP server URL; this is stdio over npx. Not applicable until/unless we host it. `smithery.yaml` stays in repo for the future GitHub-deploy path. |
+| mcp.so | ⏳ **PENDING** | The only outstanding manual submission. Form values + description below. |
 
-Quick facts to drop into any listing:
+Quick facts to paste anywhere:
 
 - **Package:** `npm i -g mcp-kinetic-gain` · run: `npx -y mcp-kinetic-gain`
 - **Version:** 0.7.1 · **Tools:** 63 (47 spec + 16 implementation-preview)
 - **Specs:** all 11 Kinetic Gain Protocol Suite specifications
 - **Transport:** stdio · **Optional env:** `AUDIT_STREAM_URL`
 - **Repo:** https://github.com/mizcausevic-dev/mcp-kinetic-gain
-- **Suite:** https://suite.kineticgain.com · **License:** see repo
+- **Suite:** https://suite.kineticgain.com
 
 ---
 
-## 1. Official MCP Registry (registry.modelcontextprotocol.io) — **highest value**
+## The remaining submission: mcp.so
 
-Publishing claims the `io.github.mizcausevic-dev/*` namespace via GitHub OAuth,
-so only you can publish under it. **Do this one first** — the others auto-pick-up
-once the namespace is owned.
-
-```bash
-# 1. Install the publisher CLI (one-time):
-#    macOS: brew install mcp-publisher
-#    Other: download binary from github.com/modelcontextprotocol/registry/releases
-mcp-publisher --version
-
-# 2. From repo root (where server.json lives):
-cd /path/to/mcp-kinetic-gain
-
-# 3. Authenticate via GitHub OAuth (browser opens):
-mcp-publisher login github
-
-# 4. Publish v0.7.1 — reads ./server.json:
-mcp-publisher publish
-
-# 5. Verify it landed:
-curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=kinetic-gain' | jq
-```
-
-If the bundled `$schema` date in `server.json` is rejected, run
-`mcp-publisher init` to regenerate a fresh manifest, then re-apply the npm
-identifier (`mcp-kinetic-gain`) + the `AUDIT_STREAM_URL` env var, and
-`mcp-publisher publish` again.
-
----
-
-## 2. Glama (glama.ai)
-
-Glama auto-indexes public GitHub MCP servers. To **claim** ownership (so you
-can edit metadata and the listing shows you as maintainer):
-
-1. Sign in at https://glama.ai with GitHub (`mizcausevic-dev`).
-2. Search the directory for `mcp-kinetic-gain`.
-3. Click **Claim** on the server page — the `glama.json` `maintainers`
-   entry verifies ownership automatically.
-
-Nothing to draft — Glama reads the repo.
-
----
-
-## 3. Smithery (smithery.ai)
-
-1. Sign in at https://smithery.ai with GitHub.
-2. Click **Add Server** → select `mizcausevic-dev/mcp-kinetic-gain`.
-3. Smithery reads `smithery.yaml` (stdio + `auditStreamUrl` config).
-4. **Confirm and publish.**
-
-If Smithery asks for a one-line summary, paste:
-
-> Unified MCP server for the eleven Kinetic Gain Protocol Suite specs — 63 governance tools across AEO, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AUP, Clinical AI, AI Incident Card, AI Procurement Decision Card.
-
----
-
-## 4. Cline Marketplace (github.com/cline/mcp-marketplace)
-
-Cline takes submissions as a GitHub issue on their repo. Requirements satisfied
-by this repo:
-
-- ✅ Public GitHub URL
-- ✅ README with a clear setup section
-- ✅ `llms-install.md` for AI-readable install
-- ✅ 400×400 PNG logo (`assets/logo-400.png`)
-
-### Submission steps
-
-1. Open https://github.com/cline/mcp-marketplace/issues/new and pick their
-   submission template.
-2. Use the title and body below.
-3. Attach `assets/logo-400.png` from this repo.
-
-### Issue title
-
-```
-Submission: mcp-kinetic-gain — unified MCP server for the 11 Kinetic Gain Protocol Suite specs
-```
-
-### Issue body (copy-paste)
-
-```markdown
-**GitHub Repo URL**
-https://github.com/mizcausevic-dev/mcp-kinetic-gain
-
-**Logo (400×400 PNG)**
-Attached: `logo-400.png` (also at https://github.com/mizcausevic-dev/mcp-kinetic-gain/raw/main/assets/logo-400.png)
-
-**Why this server**
-One MCP server covers all eleven Kinetic Gain Protocol Suite specs — AEO
-Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards,
-AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI
-Disclosure, AI Incident Card, and AI Procurement Decision Card. 63 tools
-total (47 spec + 16 implementation-preview) including ed25519 attestation
-verification, hash-chained audit-stream event composition + chain
-verification (offline AND live against a running audit-stream-py via
-`AUDIT_STREAM_URL`), cross-spec drift detection, and a Decision Intelligence
-preview (Decision Card → PolicyBundle, rubric status inference, incident
-remediation planning).
-
-**Setup test**
-Verified per `llms-install.md`: one stdio config entry, `npx -y mcp-kinetic-gain`,
-no API key, no build step. Optional `AUDIT_STREAM_URL` enables the three live
-audit-stream tools (`audit_event_emit`, `audit_events_query`,
-`audit_chain_verify_live`); without it, the other 60 tools run fully offline.
-
-**Categories**
-governance, compliance, AI evidence, audit, schema validation
-
-**Maintainer**
-@mizcausevic-dev
-```
-
----
-
-## 5. mcp.so
-
-Community directory with a submit form: https://mcp.so/submit. It also
-auto-crawls, but submitting ensures the v0.7.1 metadata propagates immediately.
+Community directory with a submit form: https://mcp.so/submit. The site also
+auto-crawls but submitting ensures the v0.7.1 metadata lands cleanly.
 
 ### Form values
 
@@ -193,14 +74,67 @@ Repo: https://github.com/mizcausevic-dev/mcp-kinetic-gain
 Suite: https://suite.kineticgain.com
 ```
 
+Estimated time at the keyboard: **~3 minutes**, signed in with @mizcausevic-dev.
+
 ---
 
-## Order of operations (recommended)
+## Reference: the moves that landed the others
 
-1. **Official MCP Registry** (`mcp-publisher publish`) — claims namespace; ~5 min.
-2. **Smithery** (Add Server flow) — pulls smithery.yaml automatically; ~3 min.
-3. **Glama** (Claim button) — verifies via glama.json; ~2 min.
-4. **Cline** (GitHub issue submission) — paste the title + body above, attach `logo-400.png`; ~5 min.
-5. **mcp.so** (submit form) — paste the form values + description; ~3 min.
+Documented here so future version bumps don't need to re-derive the workflow.
 
-Total time at the keyboard: **~20 minutes**, all auth-gated on `@mizcausevic-dev`.
+### Official MCP Registry — how v0.7.1 got published
+
+```bash
+# 1. Get mcp-publisher (one-time):
+#    macOS: brew install mcp-publisher
+#    Other: download binary from github.com/modelcontextprotocol/registry/releases
+mcp-publisher --version
+
+# 2. From repo root:
+cd /path/to/mcp-kinetic-gain
+
+# 3. Authenticate (browser opens):
+mcp-publisher login github
+
+# 4. Publish — reads ./server.json:
+mcp-publisher publish
+
+# 5. Verify it landed:
+curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=kinetic-gain' | jq
+```
+
+For future version bumps: edit `server.json` `version` + `packages[].version`,
+edit `package.json` `version`, ship npm first (CI handles it), then re-run
+`mcp-publisher publish`. The npm tarball must carry `mcpName` in package.json
+for the Registry to accept the package mapping.
+
+### Cline marketplace — what was submitted
+
+Issue [#1661](https://github.com/cline/mcp-marketplace/issues/1661) carries:
+- Repo URL
+- 400×400 logo (embedded inline; standalone copy in this repo at `assets/logo-400.png`)
+- Reason + install testing checklist
+- `llms-install.md` for AI-readable install
+
+If Cline asks for revisions, the issue body can be edited in place — no
+re-submission needed.
+
+---
+
+## When this lane re-opens
+
+- **mcp-kinetic-gain bump > 0.7.x**: re-run `mcp-publisher publish` after npm ships.
+- **A hosted HTTPS variant exists**: re-evaluate Smithery (the `smithery.yaml` is ready).
+- **Glama unblocks billing-free submissions**: re-evaluate the claim flow.
+- **Pulse Issue #5 (Aug)**: the lane shows up in Pulse measurements via the
+  registry metadata — no action needed, just noting the dependency.
+
+## Pre-flight artifacts already in repo
+
+| Artifact | Path | Purpose |
+| --- | --- | --- |
+| Registry manifest | `server.json` | Official MCP Registry publish input |
+| Smithery config | `smithery.yaml` | Reserved for future hosted variant |
+| Glama claim | `glama.json` | Reserved for future Glama re-evaluation |
+| Cline install guide | `llms-install.md` | AI-readable install for Cline |
+| Marketplace logo | `assets/logo-400.png` | 400×400 PNG attached to Cline submission |
