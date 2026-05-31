@@ -160,6 +160,17 @@ import {
   handleSuiteDocDrift,
 } from "./handlers/suite-ops.js";
 
+import {
+  handleDefensetechVaultResolve3axis,
+  handleDefensetechAuditEventCheckInvariants,
+  handleDefensetechCheckDfars72hClock,
+  handleDefensetechCheckCuiDistributionStatement,
+  handleDefensetechCheckItarUsPerson,
+  handleDefensetechIncidentClassifyEventType,
+  handleDefensetechSummarizeCmmcEvidenceBundle,
+  handleDefensetechVaultContractCrossBindingCheck,
+} from "./handlers/defensetech.js";
+
 export const handlers: Record<string, (args: any) => Promise<string>> = {
   // AEO
   aeo_fetch: handleAeoFetch,
@@ -247,11 +258,21 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   // v0.6.0 — Cross-spec operations
   suite_doc_detect_spec: handleSuiteDocDetectSpec,
   suite_doc_drift: handleSuiteDocDrift,
+
+  // v0.8.0 — DefenseTech 6-pack tooling
+  defensetech_vault_resolve_3axis: handleDefensetechVaultResolve3axis,
+  defensetech_audit_event_check_invariants: handleDefensetechAuditEventCheckInvariants,
+  defensetech_check_dfars_72h_clock: handleDefensetechCheckDfars72hClock,
+  defensetech_check_cui_distribution_statement: handleDefensetechCheckCuiDistributionStatement,
+  defensetech_check_itar_us_person: handleDefensetechCheckItarUsPerson,
+  defensetech_incident_classify_event_type: handleDefensetechIncidentClassifyEventType,
+  defensetech_summarize_cmmc_evidence_bundle: handleDefensetechSummarizeCmmcEvidenceBundle,
+  defensetech_vault_contract_cross_binding_check: handleDefensetechVaultContractCrossBindingCheck,
 };
 
 export function buildServer(): Server {
   const server = new Server(
-    { name: "mcp-kinetic-gain", version: "0.6.0" },
+    { name: "mcp-kinetic-gain", version: "0.8.0" },
     { capabilities: { tools: {} } },
   );
 
