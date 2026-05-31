@@ -1306,8 +1306,8 @@ describe("AI Procurement Decision Card", () => {
 // Cross-cutting
 // ----------------------------------------------------------------------------
 describe("Unknown tool", () => {
-  it("server exposes exactly the 63 declared tools (11 specs + 5 cross-cutting ops + 3 live audit-stream tools, v0.7.0)", () => {
-    expect(Object.keys(handlers)).toHaveLength(63);
+  it("server exposes exactly the 71 declared tools (11 specs + 5 cross-cutting ops + 3 live audit-stream tools + 8 DefenseTech, v0.8.0)", () => {
+    expect(Object.keys(handlers)).toHaveLength(71);
   });
 });
 
