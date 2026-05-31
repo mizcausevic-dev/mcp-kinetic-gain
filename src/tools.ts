@@ -905,4 +905,118 @@ export const toolDescriptors = [
       },
     },
   },
+
+  // --------------------------------------------------------------------------
+  // v0.8.0 — DefenseTech 6-pack tooling
+  // --------------------------------------------------------------------------
+  {
+    name: "defensetech_vault_resolve_3axis",
+    description:
+      "Resolve a (CUI tier, export-control status, foreign-person restriction) tuple against a DefenseTech 3-axis vault contract. Returns the most-restrictive resolved policy: intersected allowed_actions, max minimum_human_user_status, OR-ed requires_* flags. The DefenseTech runtime-policy operator.",
+    inputSchema: {
+      type: "object",
+      required: ["contract", "tuple"],
+      additionalProperties: false,
+      properties: {
+        contract: { type: "object" },
+        tuple: {
+          type: "object",
+          required: ["cui", "export_control", "foreign_person"],
+          additionalProperties: false,
+          properties: {
+            cui: { type: "string" },
+            export_control: { type: "string" },
+            foreign_person: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: "defensetech_audit_event_check_invariants",
+    description:
+      "Run all 3 DefenseTech audit-stream invariants against a single event: (#1) CUI distribution-statement on CUI-Specified+ per DoDI 5230.24, (#2) ITAR us-person verification per 22 CFR 120.62, (#3) DFARS 252.204-7012(c)(1)(ii) 72-hour cyber incident reporting wall-clock. Returns ok + errors + passed.",
+    inputSchema: {
+      type: "object",
+      required: ["event"],
+      additionalProperties: false,
+      properties: { event: { type: "object" } },
+    },
+  },
+  {
+    name: "defensetech_check_dfars_72h_clock",
+    description:
+      "Check DFARS 252.204-7012(c)(1)(ii) 72-hour cyber-incident reporting clock specifically. Returns elapsed_hours, within_window, overrun_hours.",
+    inputSchema: {
+      type: "object",
+      required: ["occurred_at", "filed_at"],
+      additionalProperties: false,
+      properties: {
+        occurred_at: { type: "string", format: "date-time" },
+        filed_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
+  {
+    name: "defensetech_check_cui_distribution_statement",
+    description:
+      "Check that a CUI-Specified+ tier event carries the required distribution_statement (DoDI 5230.24). For PUBLIC / CUI-BASIC tiers reports applicable=false.",
+    inputSchema: {
+      type: "object",
+      required: ["cui_categorization"],
+      additionalProperties: false,
+      properties: {
+        cui_categorization: { type: "string" },
+        distribution_statement: { type: "object" },
+      },
+    },
+  },
+  {
+    name: "defensetech_check_itar_us_person",
+    description:
+      "Check that an ITAR resource event has US-PERSON-VERIFIED (or AUTHORIZED-FOREIGN-PERSON-WITH-LICENSE + DDTC license number tokenized) on the agent. Per 22 CFR 120.62 / 22 CFR 120.50 deemed-export rule.",
+    inputSchema: {
+      type: "object",
+      required: ["export_control_status"],
+      additionalProperties: false,
+      properties: {
+        export_control_status: { type: "string" },
+        human_user_us_person_status: { type: "string" },
+        ddtc_export_license_number_tokenized: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "defensetech_incident_classify_event_type",
+    description:
+      "Given a freeform description of a defense-AI incident, classify it into one of the 22 DefenseTech Incident Card event_type values (DFARS cyber / CUI spillage / ITAR violation / foreign-person breach / classified misuse / NISPOM insider-threat / CMMC POA&M / AI-tool supply-chain / etc.). Returns top 3 candidates with token-match scoring.",
+    inputSchema: {
+      type: "object",
+      required: ["description"],
+      additionalProperties: false,
+      properties: { description: { type: "string" } },
+    },
+  },
+  {
+    name: "defensetech_summarize_cmmc_evidence_bundle",
+    description:
+      "Summarize a CMMC L2/L3 readiness evidence bundle: target level, assessment mode, evidence count, family coverage count, outcome distribution, orphan-failure count (not-satisfied without poam_ref), SPRS evidence presence, and quick invariant checks for POA&M traceability + SPRS-when-7019/7020-in-scope.",
+    inputSchema: {
+      type: "object",
+      required: ["bundle"],
+      additionalProperties: false,
+      properties: { bundle: { type: "object" } },
+    },
+  },
+  {
+    name: "defensetech_vault_contract_cross_binding_check",
+    description:
+      "Verify the cross_binding_refs block on a DefenseTech vault contract is syntactically valid: all referenced repos are HTTPS URLs. Returns valid_refs + errors. Does NOT fetch remotely (syntactic check only).",
+    inputSchema: {
+      type: "object",
+      required: ["contract"],
+      additionalProperties: false,
+      properties: { contract: { type: "object" } },
+    },
+  },
 ];

@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here.
 
+## [0.8.0] - 2026-05-31
+
+**DefenseTech 6-pack tooling.** 8 new MCP tools wrapping the DefenseTech audit-stream + 3-axis vault contract + CMMC L2/L3 evidence-bundle semantics so a Claude chat can validate / resolve / classify DefenseTech artifacts directly. **71 tools total** (63 prior + 8 DefenseTech).
+
+### Added
+
+- `defensetech_vault_resolve_3axis` — resolve a (CUI tier, export-control status, foreign-person restriction) tuple against a 3-axis vault contract → most-restrictive intersected policy. The DefenseTech runtime-policy operator.
+- `defensetech_audit_event_check_invariants` — run all 3 DefenseTech invariants (CUI distribution-statement + ITAR us-person + DFARS 72-hour wall-clock) against a single audit event.
+- `defensetech_check_dfars_72h_clock` — pure clock check: filed_at vs occurred_at vs 72h budget. Returns elapsed_hours, within_window, overrun_hours.
+- `defensetech_check_cui_distribution_statement` — DoDI 5230.24 invariant per CUI tier.
+- `defensetech_check_itar_us_person` — 22 CFR 120.62 us-person verification + 22 CFR 120.50 deemed-export rule with DDTC license number support.
+- `defensetech_incident_classify_event_type` — given a freeform incident description, classify into one of the 22 DefenseTech Incident Card event_types (largest Incident Card profile in the Suite).
+- `defensetech_summarize_cmmc_evidence_bundle` — family coverage + outcome distribution + orphan-failure detection + SPRS-when-7019/7020 invariant check.
+- `defensetech_vault_contract_cross_binding_check` — syntactic validation of `cross_binding_refs` (DefenseTech-unique REQUIRED schema field).
+
+### Wiring
+
+- New handler module `src/handlers/defensetech.ts` (zero new runtime deps).
+- Imports + handler registry entries added to `src/server.ts`.
+- 8 tool definitions appended to `src/tools.ts`.
+- Server version string bumped 0.6.0 → 0.8.0.
+
+All 126 existing vitest tests still pass. Typecheck clean.
+
 ## [0.7.1] - 2026-05-24
 
 **Registry distribution.** Metadata-only release that makes the server
