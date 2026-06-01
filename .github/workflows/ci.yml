@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege: read-only test runs. GITHUB_TOKEN gets no write to
+# anything (contents, packages, issues, PRs, actions). The npm publish
+# flow lives in publish.yml with its own scoped permissions.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
