@@ -1,0 +1,65 @@
+name: OpenSSF Scorecard
+
+# Automated security posture scoring against the OpenSSF Scorecard ruleset:
+#   https://github.com/ossf/scorecard
+#
+# Score appears in the GitHub Security tab + can be embedded as a badge.
+# Catches regressions in: dangerous workflows, missing branch protection,
+# unpinned actions, missing fuzzing, weak deps, exposed secrets, etc.
+#
+# Runs:
+#   - Weekly Saturday cron (results stay fresh)
+#   - On any push to main (catches just-shipped regressions)
+#   - On PRs targeting main (catches regressions before merge)
+
+on:
+  branch_protection_rule:
+  schedule:
+    # Saturday 13:00 UTC — between European EOW + US start-of-day
+    - cron: "0 13 * * 6"
+  push:
+    branches: [main]
+
+# Scorecard needs:
+#   - read repo contents + metadata
+#   - write security events (publishes findings to GH Code Scanning)
+#   - read-only ID token for OIDC signing of the result (no secrets needed)
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+  actions: read
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # publish_results: true sends the score to the public Scorecard
+          # API so it appears at https://securityscorecards.dev/viewer/?uri=
+          # github.com/mizcausevic-dev/mcp-kinetic-gain
+          publish_results: true
+
+      - name: Upload SARIF (so Security tab shows findings)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+      - name: Upload artifact (so the raw JSON is downloadable from the run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 30
