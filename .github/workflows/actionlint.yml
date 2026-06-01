@@ -1,0 +1,45 @@
+name: actionlint
+
+# Static analysis for GitHub Actions workflows.
+# Catches:
+#   - Syntax errors (mismatched quotes, bad expressions)
+#   - Script-injection patterns (${{ github.event.* }} interpolated into
+#     shell context without proper escaping)
+#   - Misused expression contexts (${{ env.X }} where it doesn't work)
+#   - Glob-pattern errors in path filters
+#   - shellcheck findings inside `run:` blocks
+#   - Outdated runner labels
+#   - Action input/output mismatches against the action.yml schema
+#
+# Triggers on any change to .github/ — pre-merge gate so workflow bugs
+# don't get baked in.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/**"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download actionlint
+        run: |
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) latest
+          ./actionlint -version
+      - name: Run actionlint
+        run: |
+          # -shellcheck= disables external shellcheck dependency (we just
+          # want the in-Go workflow checks). To enable shellcheck add a
+          # `sudo apt-get install -y shellcheck` step before this and drop
+          # the `-shellcheck=` flag.
+          ./actionlint -color -shellcheck=
