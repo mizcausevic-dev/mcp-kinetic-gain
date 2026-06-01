@@ -4,3 +4,6 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 .claude/
+
+# CycloneDX SBOM generated at publish time, attached to GH Release
+sbom/
