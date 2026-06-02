@@ -31,7 +31,16 @@ import {
   tutorCardSchema,
 } from "./schemas.js";
 
-export const PACKAGE_VERSION = "0.5.2";
+// Import + re-export PACKAGE_VERSION from the shared single-source-of-truth
+// module so `cli.ts`, `server.ts`, and the test suite all read the same value
+// (the one in package.json). The previous design hardcoded "0.5.2" here,
+// which drifted every release. See src/version.ts for the rationale.
+//
+// The combined `import ... ; export {...}` pattern is needed (not just a
+// re-export) because `printVersion()` below consumes the binding directly
+// from this module's scope.
+import { PACKAGE_VERSION } from "./version.js";
+export { PACKAGE_VERSION };
 
 interface SpecMapping {
   key: string;

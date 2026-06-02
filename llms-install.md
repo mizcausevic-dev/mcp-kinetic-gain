@@ -19,7 +19,7 @@ MCP settings, Cursor, etc.):
 }
 ```
 
-That's the entire installation. Restart the client; 63 tools appear.
+That's the entire installation. Restart the client; 71 tools appear.
 
 ## Optional: live audit-stream tools
 
@@ -40,13 +40,16 @@ via the `AUDIT_STREAM_URL` environment variable:
 }
 ```
 
-Without it, the server runs fully offline (the other 60 tools work unchanged).
+Without it, the server runs fully offline (the other 68 tools work unchanged).
 
 ## What you get
 
-63 tools across all eleven Kinetic Gain Protocol Suite specs (AEO Protocol,
+71 tools across all eleven Kinetic Gain Protocol Suite specs (AEO Protocol,
 Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor
 Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI
 Incident Card, AI Procurement Decision Card) plus ed25519 attestation
-verification, hash-chained audit-stream events, cross-spec drift detection, and
-a Decision Intelligence preview. No credentials required for the core tool set.
+verification, hash-chained audit-stream events, cross-spec drift detection, a
+Decision Intelligence preview, and the DefenseTech 6-pack (3-axis vault
+resolver, CUI/ITAR/DFARS invariant checkers, CMMC evidence-bundle summarizer,
+Incident Card event-type classifier). No credentials required for the core
+tool set.

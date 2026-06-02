@@ -51,6 +51,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { toolDescriptors } from "./tools.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 import {
   handleAeoFetch,
@@ -272,7 +273,7 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
 
 export function buildServer(): Server {
   const server = new Server(
-    { name: "mcp-kinetic-gain", version: "0.8.0" },
+    { name: "mcp-kinetic-gain", version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
   );
 
@@ -306,7 +307,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v0.5.2: listening on stdio (${toolDescriptors.length} tools across 11 specs)\n`,
+    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 11 specs)\n`,
   );
 }
 
