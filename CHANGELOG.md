@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here.
 
+## [0.8.1] - Unreleased
+
+Docs, tests, and tooling only. No tool was added or changed; the server still exposes 71 tools and there is no behavior change. This release reconciles the documentation to the actual `toolDescriptors` array and makes the README the registry-scanner detection surface.
+
+### Changed
+
+- README: replaced the stale 18-row tool table with a complete, generated 71-tool catalog placed right after the intro, so every tool lands inside the first 8000 chars (the window README-reading registry scanners slice). The catalog is `<details>`-collapsed for humans.
+- README body sync: "18 tool descriptors" -> 71; "74 unit tests" -> 126. The bottom "Kinetic Gain Protocol Suite" table's stale, ambiguous per-spec "Tools in this server" counts were replaced with one verified total ("71 tools total"); verticals kept.
+- Header doc-comments and the startup banner in `src/tools.ts` and `src/server.ts` synced to 71 / v0.8.0, with `@tool-count` sentinels added.
+- Stripped em-dashes (U+2014) from the README and the catalog generator output.
+- `package-lock.json` regenerated to match `package.json` (0.8.0 / node >= 20); it was stale at 0.5.2 / node >= 18.
+
+### Added
+
+- `scripts/gen-readme-tools.mjs`: generates the README tool catalog from `src/tools.ts` (single source of truth), so the catalog cannot drift from the array.
+- `tests/tool-count.test.ts`: CI drift guards. Every `@tool-count` sentinel must equal `toolDescriptors.length`; the banner must stay dynamic; the README catalog row-count must equal the array with every tool present; the catalog must end within the first 8000 chars; the Suite-table total must equal the array.
+- `tests/readme-extraction-parity.test.ts`: replays MCPpedia's exact extraction regex over the README's first 8000 chars and asserts it extracts all 71 tools (no miss, no phantom).
+
+### Notes
+
+- README-only changes reach a README-reading scanner via its own refresh cadence; no npm publish is required for that path.
+
 ## [0.8.0] - 2026-05-31
 
 **DefenseTech 6-pack tooling.** 8 new MCP tools wrapping the DefenseTech audit-stream + 3-axis vault contract + CMMC L2/L3 evidence-bundle semantics so a Claude chat can validate / resolve / classify DefenseTech artifacts directly. **71 tools total** (63 prior + 8 DefenseTech).
