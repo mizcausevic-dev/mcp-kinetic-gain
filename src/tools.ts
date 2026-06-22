@@ -303,7 +303,7 @@ export const toolDescriptors = [
   },
   {
     name: "tutor_card_subject_check",
-    description: "Classify a topic against the tutor's subject scope. Returns one of: primary, included, excluded, unknown — with the matched term when applicable.",
+    description: "Classify a topic against the tutor's subject scope. Returns one of: primary, included, excluded, unknown, with the matched term when applicable.",
     inputSchema: {
       type: "object",
       required: ["query"],
@@ -437,7 +437,7 @@ export const toolDescriptors = [
   },
   {
     name: "aup_check_compliance",
-    description: "HEADLINE TOOL — joins an AUP with a Student AI Disclosure and decides whether the submission complies with the operative policy. Eight gates: policy effective window, signature, artifact_hash, teacher acknowledgment, prompt evidence mode, permitted/prohibited roles, assistance-extent ceiling, and assistance_extent_max=none vs ai_used=true. Returns { allowed, policy_id, disclosure_id, violations[] } with one entry per failed gate. The three-document join (Tutor Card + AUP + Disclosure) reduces to a single allow/deny call.",
+    description: "HEADLINE TOOL, joins an AUP with a Student AI Disclosure and decides whether the submission complies with the operative policy. Eight gates: policy effective window, signature, artifact_hash, teacher acknowledgment, prompt evidence mode, permitted/prohibited roles, assistance-extent ceiling, and assistance_extent_max=none vs ai_used=true. Returns { allowed, policy_id, disclosure_id, violations[] } with one entry per failed gate. The three-document join (Tutor Card + AUP + Disclosure) reduces to a single allow/deny call.",
     inputSchema: {
       type: "object",
       required: ["disclosure_json"],
@@ -549,7 +549,7 @@ export const toolDescriptors = [
   },
   {
     name: "incident_index_fetch",
-    description: "HEADLINE TOOL — fetch a vendor's /.well-known/ai-incidents.json index and return a procurement-friendly summary: total count, breakdown by severity, breakdown by status, IDs sorted by disclosed_at descending. The cheapest way for a CISO or procurement reviewer to scan a vendor's incident history.",
+    description: "HEADLINE TOOL, fetch a vendor's /.well-known/ai-incidents.json index and return a procurement-friendly summary: total count, breakdown by severity, breakdown by status, IDs sorted by disclosed_at descending. The cheapest way for a CISO or procurement reviewer to scan a vendor's incident history.",
     inputSchema: {
       type: "object",
       required: ["origin"],
@@ -778,7 +778,7 @@ export const toolDescriptors = [
   {
     name: "audit_chain_verify",
     description:
-      "Walk an array of GovernanceEvents top-to-bottom and verify the hash chain: monotonic event_id, prev_hash linkage, self-consistency of each event's hash. Returns { valid, checked, first_break_at, reason } — the same shape audit-stream-py's GET /verify endpoint emits.",
+      "Walk an array of GovernanceEvents top-to-bottom and verify the hash chain: monotonic event_id, prev_hash linkage, self-consistency of each event's hash. Returns { valid, checked, first_break_at, reason }, the same shape audit-stream-py's GET /verify endpoint emits.",
     inputSchema: {
       type: "object",
       required: ["events"],
@@ -867,7 +867,7 @@ export const toolDescriptors = [
   {
     name: "audit_chain_verify_live",
     description:
-      "Ask a running audit-stream-py instance to walk its own chain end-to-end and report whether it's still intact. This is the canonical compliance answer — covers the FULL server-side history, not just events the agent has in context. Returns the same shape as the local audit_chain_verify tool (valid, checked, first_break_at, reason) but for the live chain. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+      "Ask a running audit-stream-py instance to walk its own chain end-to-end and report whether it's still intact. This is the canonical compliance answer, covers the FULL server-side history, not just events the agent has in context. Returns the same shape as the local audit_chain_verify tool (valid, checked, first_break_at, reason) but for the live chain. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -894,7 +894,7 @@ export const toolDescriptors = [
   {
     name: "suite_doc_drift",
     description:
-      "Structural diff between two versions of the same Suite document. Returns { drifted, spec_before, spec_after, spec_changed, content_hash_before, content_hash_after, added_fields, removed_fields, changed_fields } — mirrors the DriftReport shape aeo-validator-service emits for watch rechecks.",
+      "Structural diff between two versions of the same Suite document. Returns { drifted, spec_before, spec_after, spec_changed, content_hash_before, content_hash_after, added_fields, removed_fields, changed_fields }, mirrors the DriftReport shape aeo-validator-service emits for watch rechecks.",
     inputSchema: {
       type: "object",
       required: ["before", "after"],
