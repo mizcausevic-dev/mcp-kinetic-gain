@@ -86,7 +86,7 @@ describe("tool-count drift guard", () => {
     const rows = [...block.matchAll(/^- `([a-z0-9_]+)`/gm)].map((m) => m[1]);
     expect(
       rows.length,
-      `README catalog has ${rows.length} rows but toolDescriptors.length is ${actual} — run \`npm run build && node scripts/gen-readme-tools.mjs --write --details\``,
+      `README catalog has ${rows.length} rows but toolDescriptors.length is ${actual}; run \`npm run build && node scripts/gen-readme-tools.mjs --write --details\``,
     ).toBe(actual);
 
     const listed = new Set(rows);
@@ -102,5 +102,16 @@ describe("tool-count drift guard", () => {
       endOffset,
       `catalog ends at char ${endOffset}; README-reading scanners slice only the first 8000`,
     ).toBeLessThanOrEqual(8000);
+  });
+
+  // The "Kinetic Gain Protocol Suite" section states one verified total instead
+  // of a per-spec tally (per-spec grouping is ambiguous: name-prefix sums to 52
+  // for the 11 specs while the canonical breakdown classifies 5 as impl-preview,
+  // giving 47). Lock that single total to the array.
+  it("README Suite-table total matches toolDescriptors.length", () => {
+    const readme = read("README.md");
+    const m = readme.match(/\*\*(\d+) tools total\*\*/);
+    expect(m, 'expected "**N tools total**" in the Suite section').not.toBeNull();
+    expect(Number(m![1])).toBe(actual);
   });
 });

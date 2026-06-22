@@ -44,19 +44,20 @@ const END = "<!-- END TOOL CATALOG -->";
 function shortDesc(raw) {
   let s = String(raw)
     .replace(/\s+/g, " ")
-    .replace(/[`]/g, "") // backticks -> nothing (avoid phantom-tool regex hits)
-    .replace(/[—–]/g, "-") // em/en dash -> hyphen
+    .replace(/`/g, "") // backticks -> nothing (avoid phantom-tool regex hits)
+    .replace(/\s*[—–]\s*/g, ", ") // em/en dash in description text -> comma (no U+2014 anywhere)
+    .replace(/,\s*,/g, ",") // collapse any doubled comma the swap produced
     .trim();
   // Prefer the first sentence if it's reasonably short.
   const dot = s.indexOf(". ");
-  if (dot > 0 && dot <= 60) s = s.slice(0, dot);
-  // Hard cap at a word boundary.
-  const CAP = 58;
+  if (dot > 0 && dot <= 62) s = s.slice(0, dot);
+  // Truncate at a word boundary; no trailing ellipsis.
+  const CAP = 62;
   if (s.length > CAP) {
     s = s.slice(0, CAP);
     const sp = s.lastIndexOf(" ");
     if (sp > 30) s = s.slice(0, sp);
-    s = s.replace(/[\s.,;:-]+$/, "") + "...";
+    s = s.replace(/[\s.,;:-]+$/, "");
   }
   return s;
 }
