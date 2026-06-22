@@ -2,6 +2,18 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
+ * @tool-count 71  — CI-enforced (tests/tool-count.test.ts) to equal
+ *   toolDescriptors.length. The ListTools handler returns toolDescriptors
+ *   verbatim, so the array is the single source of truth for the count.
+ *
+ * v0.8.0: DefenseTech tooling — 71 tools across 11 specs + cross-cutting ops
+ *   + DefenseTech. The 8 defensetech_* tools: 3-axis vault resolver, audit-
+ *   event invariant checkers (CUI distribution-statement / ITAR us-person /
+ *   DFARS 72-hour clock), CMMC evidence-bundle summarizer, Incident Card
+ *   event-type classifier, and vault-contract cross-binding check.
+ *
+ * v0.7.x: Grew the spec + implementation-preview surface to 63 tools.
+ *
  * v0.6.0: Adds 13 implementation-tooling preview tools. Now 60 tools across
  *   11 specs + 5 cross-cutting operations. New tools wrap the v0.1.0
  *   implementation stack (procurement-decision-api, policy-as-code-engine,
@@ -307,7 +319,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 11 specs)\n`,
+    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 11 specs + DefenseTech)\n`,
   );
 }
 

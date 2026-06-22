@@ -1,0 +1,74 @@
+/**
+ * Tool-count drift guard.
+ *
+ * The ListTools handler returns `toolDescriptors` verbatim, so that array is
+ * the single source of truth for "how many tools does this server expose".
+ * Prose elsewhere (header doc-comments, the startup banner, the npm/README
+ * description) has historically drifted away from it — e.g. headers said
+ * "60 tools" long after the array reached 71, which is exactly what a
+ * README-reading registry scanner (MCPpedia) keys on.
+ *
+ * This test locks the prose to the array:
+ *   1. Every `@tool-count N` sentinel in the source must equal the array length.
+ *   2. The startup banner must interpolate the array length, never a literal.
+ *
+ * To change the tool count: add/remove entries in src/tools.ts, then update the
+ * `@tool-count` sentinels. This test fails the build until they agree.
+ */
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { toolDescriptors } from "../src/tools.js";
+
+const ROOT = process.cwd();
+const read = (rel: string): string => readFileSync(join(ROOT, rel), "utf8");
+
+// Files that carry a canonical, CI-enforced tool count.
+const SENTINEL_FILES = ["src/tools.ts", "src/server.ts"];
+
+describe("tool-count drift guard", () => {
+  const actual = toolDescriptors.length;
+
+  it("exposes the expected number of tools (71 at v0.8.0)", () => {
+    // A literal floor/anchor so a silent mass-deletion of descriptors is caught
+    // even if someone "helpfully" updated the sentinels to match.
+    expect(actual).toBe(71);
+  });
+
+  it("every @tool-count sentinel equals toolDescriptors.length", () => {
+    const found: Array<{ file: string; n: number }> = [];
+    for (const file of SENTINEL_FILES) {
+      const src = read(file);
+      for (const m of src.matchAll(/@tool-count\s+(\d+)/g)) {
+        found.push({ file, n: Number(m[1]) });
+      }
+    }
+
+    // The guard is worthless if nothing is annotated — fail loudly if the
+    // sentinels were removed.
+    expect(found.length, "no @tool-count sentinels found in source").toBeGreaterThan(0);
+
+    for (const { file, n } of found) {
+      expect(
+        n,
+        `@tool-count in ${file} is ${n} but toolDescriptors.length is ${actual}`,
+      ).toBe(actual);
+    }
+  });
+
+  it("startup banner stays dynamic (never hardcodes the count)", () => {
+    const server = read("src/server.ts");
+    // Banner must interpolate the array length...
+    expect(server).toMatch(
+      /listening on stdio \(\$\{toolDescriptors\.length\} tools/,
+    );
+    // ...and must never hardcode a numeric count there.
+    expect(server).not.toMatch(/listening on stdio \(\d+ tools/);
+  });
+
+  it("all tool names are unique (no accidental duplicate descriptors)", () => {
+    const names = toolDescriptors.map((t) => t.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});

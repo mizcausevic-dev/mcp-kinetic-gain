@@ -1,28 +1,19 @@
 /**
  * MCP tool descriptors for every spec in the Kinetic Gain Protocol Suite.
  *
- * 60 tools total across 11 specs + 5 cross-cutting operations (v0.6.0):
- *   AEO Protocol               (4)
- *   Prompt Provenance          (3)
- *   Agent Cards                (4)
- *   AI Evidence Format         (3)
- *   MCP Tool Cards             (4)
- *   AI Tutor Cards             (6)  — EdTech extension
- *   Student AI Disclosure      (5)  — EdTech extension
- *   Classroom AI AUP           (5)  — EdTech extension (closes the EdTech trio)
- *   Clinical AI Disclosure     (4)  — HealthTech extension
- *   AI Incident Card           (7)  — 5 base + 2 new in v0.6 (affected_walk, remediation_plan)
- *   AI Procurement Decision    (7)  — 4 base + 3 new in v0.6 (infer_status, to_policy_bundle, signature_check)
- *   ─── cross-cutting ops (new in v0.6.0) ─────────────────────────────
- *   Hash attestation           (3)  — canonical_hash, verify, inspect
- *   Audit-stream events        (3)  — compose, chain_verify, inspect
- *   Cross-spec operations      (2)  — detect_spec, drift
+ * @tool-count 71  — CI-enforced (tests/tool-count.test.ts) to equal
+ *   toolDescriptors.length. Bump this line whenever the array below changes.
  *
- * v0.6.0 wraps the new implementation tooling (procurement-decision-api,
- * policy-as-code-engine, hash-attestation-rs, audit-stream-py,
- * incident-correlation-rs, aeo-validator-service) at preview scale so a
- * Claude conversation can answer "what would those services compute?"
- * without an HTTP round trip.
+ * 71 tools as of v0.8.0 = 47 spec + 16 implementation-preview + 8 DefenseTech,
+ * spanning all 11 Suite specs plus cross-cutting ops (hash attestation,
+ * audit-stream event composition + chain verification, cross-spec drift) and
+ * the DefenseTech runtime/invariant checkers.
+ *
+ * The authoritative count is always toolDescriptors.length — the ListTools
+ * handler returns this array verbatim (see server.ts). A hand-maintained
+ * per-spec tally used to live here and drifted (60 -> 71); it is intentionally
+ * gone. The @tool-count sentinel above is the single lock that keeps the prose
+ * honest against the array.
  */
 export const toolDescriptors = [
   // --------------------------------------------------------------------------
