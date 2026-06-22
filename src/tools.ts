@@ -1,7 +1,7 @@
 /**
  * MCP tool descriptors for every spec in the Kinetic Gain Protocol Suite.
  *
- * @tool-count 71  — CI-enforced (tests/tool-count.test.ts) to equal
+ * @tool-count 71  - CI-enforced (tests/tool-count.test.ts) to equal
  *   toolDescriptors.length. Bump this line whenever the array below changes.
  *
  * 71 tools as of v0.8.0 = 47 spec + 16 implementation-preview + 8 DefenseTech,
@@ -9,7 +9,7 @@
  * audit-stream event composition + chain verification, cross-spec drift) and
  * the DefenseTech runtime/invariant checkers.
  *
- * The authoritative count is always toolDescriptors.length — the ListTools
+ * The authoritative count is always toolDescriptors.length - the ListTools
  * handler returns this array verbatim (see server.ts). A hand-maintained
  * per-spec tally used to live here and drifted (60 -> 71); it is intentionally
  * gone. The @tool-count sentinel above is the single lock that keeps the prose

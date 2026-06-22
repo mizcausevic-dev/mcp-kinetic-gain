@@ -2,11 +2,11 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
- * @tool-count 71  — CI-enforced (tests/tool-count.test.ts) to equal
+ * @tool-count 71  - CI-enforced (tests/tool-count.test.ts) to equal
  *   toolDescriptors.length. The ListTools handler returns toolDescriptors
  *   verbatim, so the array is the single source of truth for the count.
  *
- * v0.8.0: DefenseTech tooling — 71 tools across 11 specs + cross-cutting ops
+ * v0.8.0: DefenseTech tooling - 71 tools across 11 specs + cross-cutting ops
  *   + DefenseTech. The 8 defensetech_* tools: 3-axis vault resolver, audit-
  *   event invariant checkers (CUI distribution-statement / ITAR us-person /
  *   DFARS 72-hour clock), CMMC evidence-bundle summarizer, Incident Card
