@@ -30,10 +30,10 @@ const SENTINEL_FILES = ["src/tools.ts", "src/server.ts"];
 describe("tool-count drift guard", () => {
   const actual = toolDescriptors.length;
 
-  it("exposes the expected number of tools (71 at v0.8.0)", () => {
+  it("exposes the expected number of tools (75 at v0.9.0)", () => {
     // A literal floor/anchor so a silent mass-deletion of descriptors is caught
     // even if someone "helpfully" updated the sentinels to match.
-    expect(actual).toBe(71);
+    expect(actual).toBe(75);
   });
 
   it("every @tool-count sentinel equals toolDescriptors.length", () => {

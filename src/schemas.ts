@@ -1165,3 +1165,71 @@ export const decisionCardSchema = z
   });
 
 export type DecisionCard = z.infer<typeof decisionCardSchema>;
+
+// ---------------------------------------------------------------------------
+// AI Claims Decision Card (InsurTech) — 12th Suite spec.
+// Buyer/insurer-side artifact: records that an AI system adjudicated an
+// insurance claim, with a signed, hash-chained evidence bundle. Detection key
+// is `claims_card_version` (distinct from decision_card_version). Mirrors
+// github.com/mizcausevic-dev/ai-claims-decision-card-spec v0.1.
+// ---------------------------------------------------------------------------
+export const claimsCardSchema = z.object({
+  claims_card_version: z.literal("0.1"),
+  claim: z.object({
+    claim_id: z.string().min(1),
+    policy_id: z.string().min(1),
+    claimant_ref: z.string().min(1),
+    claim_type: z.enum(["property_damage", "medical", "auto", "life", "liability", "other"]),
+    filed_at: z.string(),
+  }),
+  decision: z.object({
+    outcome: z.enum(["approve", "deny", "pend", "refer"]),
+    reasons: z.array(z.string().min(1)).min(1),
+    rule_refs: z.array(z.string()),
+    coverage: z.object({
+      covered: z.boolean(),
+      amount: z.number().nullable(),
+      currency: z.string(),
+    }),
+  }),
+  evidence_bundle: z.object({
+    sources: z
+      .array(
+        z.object({
+          source_id: z.string().min(1),
+          source_type: z.enum([
+            "document", "image", "database_record", "external_api", "structured_data",
+          ]),
+          content_hash: z.string().regex(/^[a-f0-9]{64}$/),
+          retrieval_confidence: z.number().min(0).max(1),
+          synthesis_role: z.enum(["primary", "supporting", "excluded"]),
+        }),
+      )
+      .min(1),
+    model: z.object({
+      model_id: z.string().min(1),
+      model_version: z.string().min(1),
+      provider: z.string().min(1),
+    }),
+    synthesis_method: z.string().min(1),
+  }),
+  governance: z.object({
+    underwriting_rules_version: z.string().min(1),
+    jurisdiction: z.string().min(2),
+    regulatory_refs: z.array(z.string()),
+    human_in_loop: z.boolean(),
+    reviewer_ref: z.string().nullable(),
+  }),
+  attestation: z.object({
+    card_hash: z.string().regex(/^[a-f0-9]{64}$/),
+    signature: z.string().regex(/^[a-f0-9]{128}$/),
+    algorithm: z.literal("ed25519"),
+    signing_key_id: z.string().min(1),
+    signed_at: z.string(),
+    chain_index: z.number().int().min(0),
+    prev_card_hash: z.string().length(64).nullable(),
+  }),
+  disclaimer: z.string().min(20),
+});
+
+export type ClaimsCard = z.infer<typeof claimsCardSchema>;
