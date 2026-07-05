@@ -22,6 +22,7 @@ import {
   agentCardSchema,
   aiEvidenceSchema,
   aiIncidentCardSchema,
+  claimsCardSchema,
   classroomAupSchema,
   clinicalAiCardSchema,
   decisionCardSchema,
@@ -63,6 +64,7 @@ const SPECS: SpecMapping[] = [
   { key: "clinical-ai",        versionField: "clinical_ai_card_version", displayName: "Clinical AI Card",        schema: clinicalAiCardSchema },
   { key: "ai-incident",        versionField: "incident_card_version",    displayName: "AI Incident Card",        schema: aiIncidentCardSchema },
   { key: "decision-card",      versionField: "decision_card_version",    displayName: "AI Procurement Decision Card", schema: decisionCardSchema },
+  { key: "claims-card",        versionField: "claims_card_version",      displayName: "AI Claims Decision Card", schema: claimsCardSchema },
 ];
 
 function detectSpec(doc: unknown): SpecMapping | null {

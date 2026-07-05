@@ -2,9 +2,14 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
- * @tool-count 71  - CI-enforced (tests/tool-count.test.ts) to equal
+ * @tool-count 75  - CI-enforced (tests/tool-count.test.ts) to equal
  *   toolDescriptors.length. The ListTools handler returns toolDescriptors
  *   verbatim, so the array is the single source of truth for the count.
+ *
+ * v0.9.0: AI Claims Decision Card (InsurTech) - the 12th Suite spec. 4 new
+ *   claims_card_* tools (validate / inspect / sign / chain), 71 -> 75 tools,
+ *   11 -> 12 specs. Detection key claims_card_version. Buyer/insurer-side
+ *   adjudication artifact with a signed, hash-chained evidence bundle.
  *
  * v0.8.0: DefenseTech tooling - 71 tools across 11 specs + cross-cutting ops
  *   + DefenseTech. The 8 defensetech_* tools: 3-axis vault resolver, audit-
@@ -151,6 +156,13 @@ import {
 } from "./handlers/decision-card.js";
 
 import {
+  handleClaimsCardChain,
+  handleClaimsCardInspect,
+  handleClaimsCardSign,
+  handleClaimsCardValidate,
+} from "./handlers/claims-card.js";
+
+import {
   handleAttestationCanonicalHash,
   handleAttestationInspect,
   handleAttestationVerify,
@@ -249,6 +261,12 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   decision_card_to_policy_bundle: handleDecisionCardToPolicyBundle,
   decision_card_signature_check: handleDecisionCardSignatureCheck,
 
+  // v0.9.0 — AI Claims Decision Card (InsurTech — 12th spec)
+  claims_card_validate: handleClaimsCardValidate,
+  claims_card_inspect: handleClaimsCardInspect,
+  claims_card_sign: handleClaimsCardSign,
+  claims_card_chain: handleClaimsCardChain,
+
   // v0.6.0 — Incident remediation
   incident_affected_walk: handleIncidentAffectedWalk,
   incident_remediation_plan: handleIncidentRemediationPlan,
@@ -319,7 +337,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 11 specs + DefenseTech)\n`,
+    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 12 specs + DefenseTech)\n`,
   );
 }
 

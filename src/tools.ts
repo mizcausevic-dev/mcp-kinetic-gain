@@ -1,13 +1,13 @@
 /**
  * MCP tool descriptors for every spec in the Kinetic Gain Protocol Suite.
  *
- * @tool-count 71  - CI-enforced (tests/tool-count.test.ts) to equal
+ * @tool-count 75  - CI-enforced (tests/tool-count.test.ts) to equal
  *   toolDescriptors.length. Bump this line whenever the array below changes.
  *
- * 71 tools as of v0.8.0 = 47 spec + 16 implementation-preview + 8 DefenseTech,
- * spanning all 11 Suite specs plus cross-cutting ops (hash attestation,
- * audit-stream event composition + chain verification, cross-spec drift) and
- * the DefenseTech runtime/invariant checkers.
+ * 75 tools as of v0.9.0 = 47 spec + 16 implementation-preview + 8 DefenseTech
+ * + 4 AI Claims Decision Card (InsurTech), spanning all 12 Suite specs plus
+ * cross-cutting ops (hash attestation, audit-stream event composition + chain
+ * verification, cross-spec drift) and the DefenseTech runtime/invariant checkers.
  *
  * The authoritative count is always toolDescriptors.length - the ListTools
  * handler returns this array verbatim (see server.ts). A hand-maintained
@@ -872,7 +872,7 @@ export const toolDescriptors = [
   {
     name: "suite_doc_detect_spec",
     description:
-      "Detect which Kinetic Gain Suite spec a JSON document is by sniffing its top-level *_version field. Returns { spec, version_field, version }. Recognises all 11 specs; returns spec='unknown' for anything else.",
+      "Detect which Kinetic Gain Suite spec a JSON document is by sniffing its top-level *_version field. Returns { spec, version_field, version }. Recognises all 12 specs; returns spec='unknown' for anything else.",
     inputSchema: {
       type: "object",
       required: ["body"],
@@ -1008,6 +1008,66 @@ export const toolDescriptors = [
       required: ["contract"],
       additionalProperties: false,
       properties: { contract: { type: "object" } },
+    },
+  },
+  // --------------------------------------------------------------------------
+  // AI Claims Decision Card (InsurTech) — v0.9.0, 12th Suite spec
+  // --------------------------------------------------------------------------
+  {
+    name: "claims_card_validate",
+    description:
+      "Validate an AI Claims Decision Card (InsurTech) JSON document against the v0.1 spec. Checks the claims_card_version detection key, required top-level keys, decision.outcome enum, a non-empty evidence_bundle.sources, and the disclaimer. Returns { valid, claims_card_id, version } or { valid: false, reason }.",
+    inputSchema: {
+      type: "object",
+      required: ["document"],
+      additionalProperties: false,
+      properties: {
+        document: { type: "object", description: "The Claims Decision Card JSON (parsed object)." },
+      },
+    },
+  },
+  {
+    name: "claims_card_inspect",
+    description:
+      "Structured summary of an AI Claims Decision Card: claim type, outcome, coverage, evidence count, model, jurisdiction, human-in-loop, chain position, and attestation status. Cheaper than reading the full card.",
+    inputSchema: {
+      type: "object",
+      required: ["document"],
+      additionalProperties: false,
+      properties: {
+        document: { type: "object", description: "The Claims Decision Card JSON (parsed object)." },
+      },
+    },
+  },
+  {
+    name: "claims_card_sign",
+    description:
+      "Compute the canonical SHA-256 hash of an AI Claims Decision Card for ed25519 signing. Sorts object keys recursively and excludes attestation.card_hash + attestation.signature before hashing. Returns the 64-char lowercase hex card_hash; caller signs it offline.",
+    inputSchema: {
+      type: "object",
+      required: ["document"],
+      additionalProperties: false,
+      properties: {
+        document: {
+          type: "object",
+          description: "Claims Decision Card. attestation.card_hash and attestation.signature are stripped before hashing.",
+        },
+      },
+    },
+  },
+  {
+    name: "claims_card_chain",
+    description:
+      "Link a new AI Claims Decision Card to its predecessor: sets attestation.chain_index (prev + 1) and attestation.prev_card_hash. Validates the predecessor hash is 64-char hex and its index is a non-negative integer. Call claims_card_sign next.",
+    inputSchema: {
+      type: "object",
+      required: ["card", "prev_card_hash", "prev_chain_index"],
+      additionalProperties: false,
+      properties: {
+        card: { type: "object", description: "The new Claims Decision Card (attestation may be partial)." },
+        prev_card_hash: { type: "string", description: "64-char lowercase hex SHA-256 of the previous card." },
+        prev_chain_index: { type: "integer", description: "chain_index of the previous card." },
+      },
     },
   },
 ];

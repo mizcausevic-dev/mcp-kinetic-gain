@@ -27,6 +27,7 @@ const SPEC_BY_VERSION_FIELD: Record<string, string> = {
   clinical_ai_card_version: "clinical-ai",
   incident_card_version: "incident-card",
   decision_card_version: "decision-card",
+  claims_card_version: "claims-card",
 };
 
 /**
