@@ -24,17 +24,18 @@ on:
 #   - read repo contents + metadata
 #   - write security events (publishes findings to GH Code Scanning)
 #   - read-only ID token for OIDC signing of the result (no secrets needed)
-permissions:
-  contents: read
-  security-events: write
-  id-token: write
-  actions: read
+permissions: read-all
 
 jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+      actions: read
 
     steps:
       - name: Checkout (full history)
