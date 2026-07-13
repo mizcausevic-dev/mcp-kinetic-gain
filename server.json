@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.mizcausevic-dev/mcp-kinetic-gain",
-  "description": "Unified MCP server for the Kinetic Gain Suite + DefenseTech 6-pack — 71 governance tools.",
-  "version": "0.8.0",
+  "description": "Unified MCP server for the 12-spec Kinetic Gain Suite + DefenseTech 6-pack — 75 governance tools.",
+  "version": "0.9.0",
   "repository": {
     "url": "https://github.com/mizcausevic-dev/mcp-kinetic-gain",
     "source": "github"
@@ -11,7 +11,7 @@
     {
       "registryType": "npm",
       "identifier": "mcp-kinetic-gain",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "transport": {
         "type": "stdio"
       },
