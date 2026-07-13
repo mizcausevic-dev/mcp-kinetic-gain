@@ -8,8 +8,8 @@ that may already be resolved.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a suspected vulnerability. Use GitHub's private
-vulnerability reporting flow for this repository:
+Do not open a public issue for a suspected vulnerability. Use this repository's
+[private vulnerability reporting form](https://github.com/mizcausevic-dev/mcp-kinetic-gain/security/advisories/new):
 
 1. Open the repository's **Security** tab.
 2. Select **Advisories** and **Report a vulnerability**.
