@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Server as HttpServer } from "node:http";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1330,6 +1331,13 @@ describe("CLI dispatch", () => {
     const out = await dispatchCli(["node", "server.js", "--help"]);
     expect(out.handled).toBe(true);
     expect(out.exitCode).toBe(0);
+  });
+
+  it("keeps CLI help aligned with all 12 Suite spec detectors", () => {
+    const cliSource = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
+    expect(cliSource).toContain("against the 12 specs");
+    expect(cliSource).toContain("decision_card_version");
+    expect(cliSource).toContain("claims_card_version");
   });
 
   it("rejects unknown flags with exit code 3", async () => {

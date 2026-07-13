@@ -2,27 +2,34 @@
 
 All notable changes to this project are documented here.
 
-## [0.8.1] - Unreleased
+## [0.9.0] - 2026-07-04
 
-Docs, tests, and tooling only. No tool was added or changed; the server still exposes 71 tools and there is no behavior change. This release reconciles the documentation to the actual `toolDescriptors` array and makes the README the registry-scanner detection surface.
-
-### Changed
-
-- README: replaced the stale 18-row tool table with a complete, generated 71-tool catalog placed right after the intro, so every tool lands inside the first 8000 chars (the window README-reading registry scanners slice). The catalog is `<details>`-collapsed for humans.
-- README body sync: "18 tool descriptors" -> 71; "74 unit tests" -> 126. The bottom "Kinetic Gain Protocol Suite" table's stale, ambiguous per-spec "Tools in this server" counts were replaced with one verified total ("71 tools total"); verticals kept.
-- Header doc-comments and the startup banner in `src/tools.ts` and `src/server.ts` synced to 71 / v0.8.0, with `@tool-count` sentinels added.
-- Stripped em-dashes (U+2014) from the README and the catalog generator output.
-- `package-lock.json` regenerated to match `package.json` (0.8.0 / node >= 20); it was stale at 0.5.2 / node >= 18.
+Adds the AI Claims Decision Card as the twelfth Suite spec and reconciles the
+distribution metadata and generated documentation with the 75-tool server.
 
 ### Added
 
-- `scripts/gen-readme-tools.mjs`: generates the README tool catalog from `src/tools.ts` (single source of truth), so the catalog cannot drift from the array.
-- `tests/tool-count.test.ts`: CI drift guards. Every `@tool-count` sentinel must equal `toolDescriptors.length`; the banner must stay dynamic; the README catalog row-count must equal the array with every tool present; the catalog must end within the first 8000 chars; the Suite-table total must equal the array.
-- `tests/readme-extraction-parity.test.ts`: replays MCPpedia's exact extraction regex over the README's first 8000 chars and asserts it extracts all 71 tools (no miss, no phantom).
+- Four deterministic Claims Decision Card tools: `claims_card_validate`,
+  `claims_card_inspect`, `claims_card_sign`, and `claims_card_chain`.
+- Claims Card schema, CLI auto-detection via `claims_card_version`, handler
+  wiring, and validation/signing/chain-integrity tests.
+
+### Changed
+
+- README: replaced the stale partial tool table with the complete generated
+  75-tool catalog inside registry scanners' first 8,000-character window.
+- Header comments and the startup banner now derive or assert the 75-tool count.
+- `server.json`, `package.json`, and the lockfile now match the published npm
+  package at v0.9.0.
+- Vitest upgraded to 4.1.10 and transitive runtime packages refreshed; npm
+  audit reports zero known vulnerabilities.
+- CLI help now reports all 12 specs and both decision-card discriminator keys.
+- Stripped em dashes from registry-scanned catalog content.
 
 ### Notes
 
-- README-only changes reach a README-reading scanner via its own refresh cadence; no npm publish is required for that path.
+- v0.9.0 is already published to npm; this metadata reconciliation does not
+  require another npm publish.
 
 ## [0.8.0] - 2026-05-31
 

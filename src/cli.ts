@@ -164,7 +164,7 @@ function printHelp(): void {
 
 USAGE
   mcp-kinetic-gain                       Run the stdio MCP server (default)
-  mcp-kinetic-gain validate <paths...>   Validate JSON files / globs against the 10 specs
+  mcp-kinetic-gain validate <paths...>   Validate JSON files / globs against the 12 specs
   mcp-kinetic-gain --help                Print this message
   mcp-kinetic-gain --version             Print the package version
 
@@ -182,7 +182,8 @@ EXIT CODES
 The version field on each document selects the spec:
   aeo_version, provenance_version, agent_card_version, evidence_version,
   tool_card_version, tutor_card_version, disclosure_version, aup_version,
-  clinical_ai_card_version, incident_card_version
+  clinical_ai_card_version, incident_card_version, decision_card_version,
+  claims_card_version
 `);
 }
 
