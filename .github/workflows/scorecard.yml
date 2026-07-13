@@ -14,6 +14,7 @@ name: OpenSSF Scorecard
 
 on:
   branch_protection_rule:
+  workflow_dispatch:
   schedule:
     # Saturday 13:00 UTC — between European EOW + US start-of-day
     - cron: "0 13 * * 6"
@@ -44,7 +45,7 @@ jobs:
           persist-credentials: false
 
       - name: Run Scorecard
-        uses: ossf/scorecard-action@13ec8c77e8a5dae7e0a0d47bde3e3004df15d34f  # v2
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
         continue-on-error: true  # tolerate transient GH code-search 429s / upstream Sigstore-TUF signing failures
         with:
           results_file: results.sarif
@@ -56,7 +57,7 @@ jobs:
           publish_results: false
 
       - name: Upload SARIF (so Security tab shows findings)
-        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4
         with:
           sarif_file: results.sarif
 
