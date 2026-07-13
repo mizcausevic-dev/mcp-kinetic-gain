@@ -1,0 +1,43 @@
+# Publishes ./server.json to the official MCP Registry using GitHub OIDC auth
+# (no stored secret; the io.github.mizcausevic-dev namespace trusts this repo's
+# identity token). Manual trigger only: run AFTER the npm release is live and
+# server.json/CHANGELOG match it. See docs/REGISTRIES.md.
+name: Publish to MCP Registry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mcp-registry-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --version
+
+      - name: Login via GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish
+
+      - name: Verify registry advanced
+        run: |
+          sleep 10
+          latest=$(curl -fsS 'https://registry.modelcontextprotocol.io/v0/servers?search=kinetic' \
+            | python3 -c "import json,sys;d=json.load(sys.stdin);print([s['server']['version'] for s in d['servers'] if s.get('_meta',{}).get('io.modelcontextprotocol.registry/official',{}).get('isLatest')][0])")
+          expected=$(python3 -c "import json;print(json.load(open('server.json'))['version'])")
+          echo "registry latest=$latest expected=$expected"
+          test "$latest" = "$expected"
