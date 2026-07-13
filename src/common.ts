@@ -6,7 +6,9 @@ import { createHash } from "node:crypto";
 const ACCEPT_HEADER = "application/aeo+json, application/json";
 
 export function stripTrailingSlashes(s: string): string {
-  return s.replace(/\/+$/, "");
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end -= 1;
+  return end === s.length ? s : s.slice(0, end);
 }
 
 export async function fetchJson(url: string, timeoutMs = 10_000): Promise<unknown> {

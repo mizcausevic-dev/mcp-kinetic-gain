@@ -16,13 +16,14 @@ on:
 # npm provenance requires id-token: write so the GitHub OIDC token can be
 # minted and submitted to Sigstore as the attestation subject.
 # contents: write is required to attach SBOM artifact to the GitHub Release.
-permissions:
-  contents: write
-  id-token: write
+permissions: read-all
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Check out the tagged commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4

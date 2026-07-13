@@ -6,8 +6,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { handlers } from "../src/server.js";
-import { canonicalSha256 } from "../src/common.js";
+import { canonicalSha256, stripTrailingSlashes } from "../src/common.js";
 import { dispatchCli, runValidate, PACKAGE_VERSION } from "../src/cli.js";
+
+describe("shared URL utilities", () => {
+  it("strips every trailing slash without changing internal slashes", () => {
+    expect(stripTrailingSlashes("https://example.com/path///")).toBe("https://example.com/path");
+    expect(stripTrailingSlashes("https://example.com/path")).toBe("https://example.com/path");
+    expect(stripTrailingSlashes("////")).toBe("");
+  });
+
+  it("handles adversarial slash runs in linear time", () => {
+    expect(stripTrailingSlashes(`https://example.com${"/".repeat(250_000)}`)).toBe(
+      "https://example.com",
+    );
+  });
+});
 
 // ----------------------------------------------------------------------------
 // Test fixtures
