@@ -115,3 +115,24 @@ describe("tool-count drift guard", () => {
     expect(Number(m![1])).toBe(actual);
   });
 });
+
+describe("release metadata drift guard", () => {
+  it("keeps package, lockfile, Registry manifest, and changelog on one version", () => {
+    const pkg = JSON.parse(read("package.json")) as { version: string };
+    const lock = JSON.parse(read("package-lock.json")) as {
+      version: string;
+      packages: { "": { version: string } };
+    };
+    const manifest = JSON.parse(read("server.json")) as {
+      version: string;
+      packages: Array<{ version: string }>;
+    };
+    const changelog = read("CHANGELOG.md");
+
+    expect(lock.version).toBe(pkg.version);
+    expect(lock.packages[""].version).toBe(pkg.version);
+    expect(manifest.version).toBe(pkg.version);
+    expect(manifest.packages.map((item) => item.version)).toEqual([pkg.version]);
+    expect(changelog).toContain(`## [${pkg.version}] - `);
+  });
+});

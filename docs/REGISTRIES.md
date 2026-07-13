@@ -1,17 +1,17 @@
 # MCP registry distribution — current state + the one remaining submission
 
-`mcp-kinetic-gain` v0.8.0 (71 tools, 11 specs + DefenseTech 6-pack, stdio over
+`mcp-kinetic-gain` v0.9.0 (75 tools, 12 specs + DefenseTech 6-pack, stdio over
 [`npm i -g mcp-kinetic-gain`](https://www.npmjs.com/package/mcp-kinetic-gain))
 is already in the registries that fit a stdio+npm server. This doc tracks
 **what's live, what was pruned, and what's still outstanding** so the lane
 doesn't drift back into "do all five again" thinking.
 
-## Status (verified 2026-06-02)
+## Status (verified 2026-07-12)
 
 | Registry | State | Notes |
 | --- | --- | --- |
-| Official MCP Registry | 🔄 **NEEDS REPUBLISH** | Currently hosting v0.7.1 (`status: active`, published 2026-05-24). Local `server.json` bumped to 0.8.0 + 71 tools; re-run `mcp-publisher publish` to advance the Registry. |
-| npm | ✅ **LIVE** | v0.8.0, `mcpName` set, 71 tools. |
+| Official MCP Registry | 🔄 **NEEDS REPUBLISH** | Currently marks v0.8.0 as latest. `server.json` is v0.9.0 + 75 tools; re-run `mcp-publisher publish` to advance the Registry. |
+| npm | ✅ **LIVE** | v0.9.0, `mcpName` set, 75 tools. |
 | mcp.so | ✅ **LIVE** | Submitted 2026-06-01 — community directory auto-crawls metadata from the GitHub repo. |
 | Cline marketplace | 🕐 **SUBMITTED** | Issue [cline/mcp-marketplace#1661](https://github.com/cline/mcp-marketplace/issues/1661) — open, awaiting Cline team review. |
 | Glama | ⛔ **PRUNED** | Throws 500s + gates behind "Add billing / Top up balance". Not worth the friction. `glama.json` stays in repo for a future re-evaluation. |
@@ -20,8 +20,8 @@ doesn't drift back into "do all five again" thinking.
 Quick facts to paste anywhere:
 
 - **Package:** `npm i -g mcp-kinetic-gain` · run: `npx -y mcp-kinetic-gain`
-- **Version:** 0.8.0 · **Tools:** 71 (47 spec + 16 implementation-preview + 8 DefenseTech)
-- **Specs:** all 11 Kinetic Gain Protocol Suite specifications + DefenseTech 6-pack
+- **Version:** 0.9.0 · **Tools:** 75 (47 spec + 16 implementation-preview + 8 DefenseTech + 4 Claims Card)
+- **Specs:** all 12 Kinetic Gain Protocol Suite specifications + DefenseTech 6-pack
 - **Transport:** stdio · **Optional env:** `AUDIT_STREAM_URL`
 - **Repo:** https://github.com/mizcausevic-dev/mcp-kinetic-gain
 - **Suite:** https://suite.kineticgain.com
@@ -73,7 +73,7 @@ re-submission needed.
 
 ## When this lane re-opens
 
-- **mcp-kinetic-gain bump > 0.8.x**: bump `server.json` `version` + `packages[].version` + `description` tool count to match, then re-run `mcp-publisher publish` after npm ships. (Lesson from 0.7.1 → 0.8.0: npm + README + CHANGELOG drifted ahead while `server.json` stayed at 0.7.1 for a week — every release must touch ALL three manifests together.)
+- **mcp-kinetic-gain bump > 0.9.0**: bump `server.json` `version` + `packages[].version` + `description` tool count to match, then re-run `mcp-publisher publish` after npm ships. The release-metadata drift test now enforces package, lockfile, manifest, and changelog version parity in CI.
 - **A hosted HTTPS variant exists**: re-evaluate Smithery (the `smithery.yaml` is ready).
 - **Glama unblocks billing-free submissions**: re-evaluate the claim flow.
 - **Pulse Issue #5 (Aug)**: the lane shows up in Pulse measurements via the
