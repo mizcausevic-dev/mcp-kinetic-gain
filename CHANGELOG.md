@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here.
 
+## [0.9.1] - 2026-08-04
+
+Security patch. Resolves two HIGH-severity advisories in transitive production
+dependencies. No API, tool, or schema changes: this release is drop-in for 0.9.0
+and upgrading is recommended for all users.
+
+### Security
+
+- `ip-address` — resolves three advisories that allow SSRF and trust-boundary
+  bypass: leading-zero octets decoded as decimal where resolvers decode octal,
+  a CIDR suffix suppressing special-use classification, and misclassification of
+  IPv4-mapped/NAT64 IPv6 addresses.
+- `fast-uri` — resolves host confusion via backslash authority introducer and
+  via literal backslash authority delimiter.
+
+Verified with `npm audit --omit=dev` reporting 0 vulnerabilities at all
+severities, with typecheck, build, and the full 172-test suite passing.
+
 ## [0.9.0] - 2026-07-04
 
 Adds the AI Claims Decision Card as the twelfth Suite spec and reconciles the
