@@ -1,6 +1,6 @@
 {
   "name": "mcp-kinetic-gain",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "mcpName": "io.github.mizcausevic-dev/mcp-kinetic-gain",
   "description": "MCP server and CLI for all twelve Kinetic Gain Protocol Suite specs + DefenseTech 6-pack tooling. One MCP client config, 75 tools (47 spec + 16 implementation-preview + 8 DefenseTech + 4 AI Claims Decision Card): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card, AI Claims Decision Card + ed25519 attestation verification, hash-chained audit-stream events, cross-spec drift detection, Decision Intelligence preview, and DefenseTech policy/invariant tooling. CLI mode validates Suite JSON files against the bundled zod schemas.",
   "type": "module",
