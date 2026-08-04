@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here.
 
+## [0.9.1] - 2026-08-04
+
+Version alignment. 0.9.1 is published on npm, so this brings `package.json`,
+the lockfile, `server.json` and this changelog onto that same version. **No code
+change: `src/` and `tests/` are byte-identical to 0.9.0.**
+
+### Changed
+
+- Version fields aligned to 0.9.1 across `package.json`, `package-lock.json`,
+  `server.json` and this changelog, satisfying the release metadata drift guard
+  in `tests/tool-count.test.ts`.
+
+### Notes
+
+- Two HIGH advisories (`ip-address` SSRF and trust-boundary bypass, `fast-uri`
+  host confusion) were reported against the committed lockfile. They do **not**
+  reach consumers: a published library ships no lockfile, so installs resolve
+  from the ranges in `package.json`. Verified by installing the package fresh,
+  which resolves `ip-address@10.4.0` and `fast-uri@3.1.5` and audits clean at
+  every severity.
+- The lockfile bump is deliberately left to Dependabot, which was enabled on
+  this repository on 2026-08-04. A lockfile regenerated on Windows omits the
+  `wasm32-wasi` optional branch that Linux CI expects, which breaks `npm ci`.
+  Dependabot generates its lockfiles on Linux and avoids that trap.
+
 ## [0.9.0] - 2026-07-04
 
 Adds the AI Claims Decision Card as the twelfth Suite spec and reconciles the
