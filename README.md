@@ -1,6 +1,6 @@
 # mcp-kinetic-gain
 
-One **MCP server**, all twelve [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling + the DefenseTech 6-pack. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **75 tools** (47 spec + 16 implementation-preview + 8 DefenseTech + 4 AI Claims Decision Card, v0.9.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card, AI Claims Decision Card - plus hash attestation (ed25519), audit-stream event composition + chain verification (offline AND live against a running audit-stream-py via `AUDIT_STREAM_URL`), cross-spec drift detection, Decision Intelligence preview, and the DefenseTech vault resolver + invariant checkers. **New in v0.9.0**: the AI Claims Decision Card (InsurTech, `claims_card_version`) - `claims_card_validate`, `claims_card_inspect`, `claims_card_sign`, `claims_card_chain`.
+One **MCP server**, all twelve [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling + the DefenseTech 8-pack. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **75 tools** (47 spec + 16 implementation-preview + 8 DefenseTech + 4 AI Claims Decision Card, v0.9.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card, AI Claims Decision Card - plus hash attestation (ed25519), audit-stream event composition + chain verification (offline AND live against a running audit-stream-py via `AUDIT_STREAM_URL`), cross-spec drift detection, Decision Intelligence preview, and the DefenseTech vault resolver + invariant checkers. **New in v0.9.0**: the AI Claims Decision Card (InsurTech, `claims_card_version`) - `claims_card_validate`, `claims_card_inspect`, `claims_card_sign`, `claims_card_chain`.
 
 This is the unified read-side companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders any of the 12 specs for humans, this server exposes them as callable tools for agents.
 
@@ -192,7 +192,7 @@ If your `candidate_text` produces an unexpected mismatch, check CRLF vs LF and t
 
 ## Tests
 
-126 unit tests against an in-process Node HTTP server (no external network). Every tool's happy path + at least one error path, plus a live local-HTTP synthetic-index test for `incident_index_fetch`:
+172 unit tests against an in-process Node HTTP server (no external network). Every tool's happy path + at least one error path, plus a live local-HTTP synthetic-index test for `incident_index_fetch`:
 
 ```bash
 npm install
@@ -228,6 +228,7 @@ npm run build
 **Suite hub:** [suite.kineticgain.com](https://suite.kineticgain.com/)
 **Companion visualizer:** [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer)
 **Red-team bench:** [prompt-injection-bench](https://github.com/mizcausevic-dev/prompt-injection-bench)
+**Reference library:** [kgp-verify](https://github.com/mizcausevic-dev/kgp-verify) (npm `kinetic-gain-protocol`, zero-dep MIT hash/sign/verify for KGP)
 
 ---
 
