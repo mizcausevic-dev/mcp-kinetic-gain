@@ -290,7 +290,7 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   suite_doc_detect_spec: handleSuiteDocDetectSpec,
   suite_doc_drift: handleSuiteDocDrift,
 
-  // v0.8.0 — DefenseTech 6-pack tooling
+  // v0.8.0 — DefenseTech 8-pack tooling
   defensetech_vault_resolve_3axis: handleDefensetechVaultResolve3axis,
   defensetech_audit_event_check_invariants: handleDefensetechAuditEventCheckInvariants,
   defensetech_check_dfars_72h_clock: handleDefensetechCheckDfars72hClock,

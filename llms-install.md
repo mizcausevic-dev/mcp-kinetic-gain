@@ -49,7 +49,7 @@ Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor
 Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI
 Incident Card, AI Procurement Decision Card) plus ed25519 attestation
 verification, hash-chained audit-stream events, cross-spec drift detection, a
-Decision Intelligence preview, and the DefenseTech 6-pack (3-axis vault
+Decision Intelligence preview, and the DefenseTech 8-pack (3-axis vault
 resolver, CUI/ITAR/DFARS invariant checkers, CMMC evidence-bundle summarizer,
 Incident Card event-type classifier). No credentials required for the core
 tool set.

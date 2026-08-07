@@ -1,6 +1,6 @@
 // handlers/defensetech.ts — v0.8.0 DefenseTech tooling extension.
 //
-// 8 MCP tools wrapping the DefenseTech 6-pack semantics so a Claude
+// 8 MCP tools wrapping the DefenseTech 8-pack semantics so a Claude
 // chat can validate / resolve / classify DefenseTech artifacts directly:
 //
 //   1. defensetech_vault_resolve_3axis
