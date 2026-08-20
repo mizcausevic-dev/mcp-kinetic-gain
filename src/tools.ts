@@ -898,7 +898,7 @@ export const toolDescriptors = [
   },
 
   // --------------------------------------------------------------------------
-  // v0.8.0 — DefenseTech 6-pack tooling
+  // v0.8.0 — DefenseTech 8-pack tooling
   // --------------------------------------------------------------------------
   {
     name: "defensetech_vault_resolve_3axis",

@@ -1,6 +1,6 @@
 # MCP registry distribution — current state + the one remaining submission
 
-`mcp-kinetic-gain` v0.9.0 (75 tools, 12 specs + DefenseTech 6-pack, stdio over
+`mcp-kinetic-gain` v0.9.0 (75 tools, 12 specs + DefenseTech 8-pack, stdio over
 [`npm i -g mcp-kinetic-gain`](https://www.npmjs.com/package/mcp-kinetic-gain))
 is already in the registries that fit a stdio+npm server. This doc tracks
 **what's live, what was pruned, and what's still outstanding** so the lane
@@ -21,7 +21,7 @@ Quick facts to paste anywhere:
 
 - **Package:** `npm i -g mcp-kinetic-gain` · run: `npx -y mcp-kinetic-gain`
 - **Version:** 0.9.0 · **Tools:** 75 (47 spec + 16 implementation-preview + 8 DefenseTech + 4 Claims Card)
-- **Specs:** all 12 Kinetic Gain Protocol Suite specifications + DefenseTech 6-pack
+- **Specs:** all 12 Kinetic Gain Protocol Suite specifications + DefenseTech 8-pack
 - **Transport:** stdio · **Optional env:** `AUDIT_STREAM_URL`
 - **Repo:** https://github.com/mizcausevic-dev/mcp-kinetic-gain
 - **Suite:** https://suite.kineticgain.com

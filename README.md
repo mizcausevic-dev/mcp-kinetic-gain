@@ -89,6 +89,27 @@ This is the unified read-side companion to [kinetic-gain-visualizer](https://git
 </details>
 <!-- END TOOL CATALOG -->
 
+## Screenshots
+
+**The tool surface, live.** [suite.kineticgain.com/mcp/](https://suite.kineticgain.com/mcp/) renders the same 75-tool breakdown as an interactive radial diagram: click a hub to filter by vertical (Core, EdTech, HealthTech, Cross-cutting, InsurTech, DefenseTech), click a leaf for the real tool name, full keyboard support (Tab + Enter/Space).
+
+![Radial diagram on suite.kineticgain.com/mcp/ showing all 75 mcp-kinetic-gain tools grouped into 12 specs plus the DefenseTech 8-pack, arranged around a central MCP Server hub](assets/screenshot-suite-mcp-constellation.png)
+
+![suite.kineticgain.com/mcp/ hero section reading "75 governance tools, one MCP config entry" with live stat tiles: 75 tools, 12 specs covered, 172 tests passing, 4 registries](assets/screenshot-suite-mcp-hero.png)
+
+**The server, running.** Captured against this exact repo checkout:
+
+```
+$ node dist/server.js
+mcp-kinetic-gain v0.9.1: listening on stdio (75 tools across 12 specs + DefenseTech)
+
+$ npm test
+ Test Files  5 passed (5)
+      Tests  172 passed (172)
+```
+
+The `75` in the startup banner is `toolDescriptors.length`, read live off the same array the ListTools handler returns, not a hand-typed string. The `172` is whatever `vitest run` actually reports. Neither number can drift from what the server and test suite really do.
+
 Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fetch tools. Specs **without** one (Prompt Provenance, AI Evidence - these usually travel inline with answers or in repos, not at fixed paths) get parse tools that take a `document_json` string.
 
 ## Install
