@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [0.9.2] - 2026-08-24
+
+Security fix release.
+
+### Fixed
+
+- Fixed SSRF and DNS-rebinding exposure in every url/origin-accepting tool
+  (20 tools across 8 specs). `fetchJson()` now validates the target before
+  fetching and, for hostnames, re-validates again at the moment the socket
+  connects rather than trusting an earlier DNS answer, closing a
+  check-then-connect gap an attacker's own DNS server could otherwise use.
+- Added IPv4-mapped and IPv4-compatible IPv6 address handling to the same
+  guard (`::ffff:a.b.c.d` and the deprecated `::a.b.c.d` forms), which
+  previously bypassed every blocked-range check entirely.
+- Added response size and shape validation to `aeo_fetch`, which previously
+  returned whatever a remote host sent back with no validation at all.
+
 ## [0.9.1] - 2026-08-04
 
 Version alignment. 0.9.1 is published on npm, so this brings `package.json`,
