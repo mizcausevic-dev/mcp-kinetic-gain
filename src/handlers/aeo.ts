@@ -7,9 +7,12 @@ export function aeoWellKnownUrl(origin: string): string {
   return stripTrailingSlashes(origin) + AEO_WELL_KNOWN_PATH;
 }
 
+const AEO_FETCH_MAX_BYTES = 1_000_000; // generous for a JSON declaration doc, far beyond any legitimate size
+
 export async function handleAeoFetch(args: { origin: string }): Promise<string> {
-  const raw = await fetchJson(aeoWellKnownUrl(args.origin));
-  return pretty(raw);
+  const raw = await fetchJson(aeoWellKnownUrl(args.origin), 10_000, AEO_FETCH_MAX_BYTES);
+  const doc = aeoDocumentSchema.parse(raw);
+  return pretty(doc);
 }
 
 export async function handleAeoInspect(args: { origin: string }): Promise<string> {

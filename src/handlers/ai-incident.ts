@@ -100,32 +100,23 @@ export async function handleIncidentIndexFetch(args: { origin: string }): Promis
   try {
     parsed = await fetchJson(url);
   } catch (err) {
-    return errorJson("fetch_failed", {
-      url,
-      reason: err instanceof Error ? err.message : String(err),
-    });
+    throw new Error(`fetch_failed: ${url}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  // Some vendors serve { "incidents": [...] }; tolerate both.
+  const candidate = Array.isArray(parsed)
+    ? parsed
+    : (parsed && typeof parsed === "object" && Array.isArray((parsed as { incidents?: unknown }).incidents)
+        ? (parsed as { incidents: unknown[] }).incidents
+        : null);
+  if (candidate === null) {
+    throw new Error(`index_malformed: ${url}: expected array or { incidents: [...] }`);
+  }
   let entries: AiIncidentIndex;
   try {
-    // Some vendors serve { "incidents": [...] }; tolerate both.
-    const candidate = Array.isArray(parsed)
-      ? parsed
-      : (parsed && typeof parsed === "object" && Array.isArray((parsed as { incidents?: unknown }).incidents)
-          ? (parsed as { incidents: unknown[] }).incidents
-          : null);
-    if (candidate === null) {
-      return errorJson("index_malformed", {
-        url,
-        reason: "expected array or { incidents: [...] }",
-      });
-    }
     entries = aiIncidentIndexSchema.parse(candidate);
   } catch (err) {
-    return errorJson("index_validation_failed", {
-      url,
-      reason: err instanceof Error ? err.message : String(err),
-    });
+    throw new Error(`index_validation_failed: ${url}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const bySeverity: Record<string, number> = {};
@@ -181,7 +172,6 @@ export async function handleIncidentAffectedWalk(args: {
   document_json?: string;
 }): Promise<string> {
   const card = await loadIncident(args);
-  if ("error" in card) return pretty(card);
   const affected = collectAffected(card);
   return pretty({
     incident_id: card.incident.id,
@@ -210,7 +200,6 @@ export async function handleIncidentRemediationPlan(args: {
   document_json?: string;
 }): Promise<string> {
   const card = await loadIncident(args);
-  if ("error" in card) return pretty(card);
 
   const baseUrgency = severityToUrgency(card.incident.severity);
   const affected = collectAffected(card);
@@ -247,18 +236,14 @@ export async function handleIncidentRemediationPlan(args: {
 async function loadIncident(args: {
   url?: string;
   document_json?: string;
-}): Promise<AiIncidentCard | { error: string }> {
-  try {
-    if (args.document_json) {
-      return aiIncidentCardSchema.parse(JSON.parse(args.document_json));
-    }
-    if (args.url) {
-      return aiIncidentCardSchema.parse(await fetchJson(args.url));
-    }
-    return { error: "must provide either `url` or `document_json`" };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
+}): Promise<AiIncidentCard> {
+  if (args.document_json) {
+    return aiIncidentCardSchema.parse(JSON.parse(args.document_json));
   }
+  if (args.url) {
+    return aiIncidentCardSchema.parse(await fetchJson(args.url));
+  }
+  throw new Error("must provide either `url` or `document_json`");
 }
 
 function severityToUrgency(sev: AiIncidentCard["incident"]["severity"]): string {
