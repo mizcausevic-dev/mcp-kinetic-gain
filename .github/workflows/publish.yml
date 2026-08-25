@@ -66,6 +66,21 @@ jobs:
           npm sbom --sbom-format cyclonedx --sbom-type library > sbom/cyclonedx.json
           node -e "const s=require('./sbom/cyclonedx.json'); console.log('SBOM:', s.bomFormat, s.specVersion, '·', (s.components||[]).length, 'components');"
 
+      - name: Ensure npm supports the OIDC trusted-publishing handshake
+        # Node 20 bundles an npm CLI too old for the OIDC handshake that
+        # `--provenance` publishing now requires against the registry. When
+        # that handshake fails, the registry silently treats the request as
+        # anonymous, which cannot PUT -- and the resulting error is a
+        # misleading 404 ("'pkg@x.y.z' is not in this registry") rather than
+        # a clear auth failure, on a package that demonstrably already
+        # exists. Confirmed against this exact repo: the Sigstore provenance
+        # attestation step succeeded, then the actual publish PUT 404'd,
+        # twice, byte-for-byte identical on a rerun -- ruling out a
+        # transient registry blip. Fix is npm >=11.5.1; pinning to `latest`
+        # here rather than a bare version so this keeps working as the OIDC
+        # requirement floor moves.
+        run: npm install -g npm@latest && npm --version
+
       - name: Publish to npm with provenance
         run: npm publish --provenance --access public
         env:
