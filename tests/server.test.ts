@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { handlers } from "../src/server.js";
-import { canonicalSha256, stripTrailingSlashes } from "../src/common.js";
+import { __allowFetchTargetForTests, canonicalSha256, stripTrailingSlashes } from "../src/common.js";
 import { dispatchCli, runValidate, PACKAGE_VERSION } from "../src/cli.js";
 
 describe("shared URL utilities", () => {
@@ -157,6 +157,7 @@ beforeAll(async () => {
   const addr = server.address();
   if (typeof addr === "object" && addr !== null) {
     origin = `http://127.0.0.1:${addr.port}`;
+    __allowFetchTargetForTests(`127.0.0.1:${addr.port}`);
   }
 });
 
@@ -1145,6 +1146,7 @@ describe("AI Incident Card", () => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
     const addr = server.address();
     const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+    __allowFetchTargetForTests(`127.0.0.1:${port}`);
     try {
       const out = JSON.parse(await handlers.incident_index_fetch!({ origin: `http://127.0.0.1:${port}` }));
       expect(out.total).toBe(3);
