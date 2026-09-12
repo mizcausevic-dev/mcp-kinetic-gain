@@ -90,9 +90,16 @@ jobs:
         run: npm install -g npm@11 && npm --version
 
       - name: Publish to npm with provenance
+        # No NPM_TOKEN. npm is deprecating 2FA-bypass tokens for direct
+        # publishing (the "npm tokens that bypass 2FA are being restricted"
+        # notice, confirmed on this exact repo 2026-09-12: the classic
+        # NODE_AUTH_TOKEN flow signed provenance fine, then 404'd on the
+        # actual PUT). id-token: write above is what this needs instead --
+        # npm's OIDC Trusted Publisher flow, no token, no OTP, ever. Requires
+        # this repo + this workflow filename registered as a Trusted
+        # Publisher on the npm package's Publishing access settings; if that
+        # registration is missing this step fails with the same E404.
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Attach SBOM to GitHub Release
         env:
