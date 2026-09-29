@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
       - name: Verify tag matches package.json version
         run: |
           tag_version="${GITHUB_REF#refs/tags/v}"
@@ -59,9 +62,8 @@ jobs:
 
       - name: Generate CycloneDX SBOM
         run: |
-          # CycloneDX 1.5 SBOM for the published mcp-kinetic-gain artifact.
-          # Captures the dep tree (with TypeScript compiler + MCP SDK at the
-          # top of the chain) for downstream auditors.
+          # Workspace dependency inventory for this release commit. Includes
+          # development dependencies; package contents are checked separately.
           mkdir -p sbom
           npm sbom --sbom-format cyclonedx --sbom-type library > sbom/cyclonedx.json
           node -e "const s=require('./sbom/cyclonedx.json'); console.log('SBOM:', s.bomFormat, s.specVersion, '·', (s.components||[]).length, 'components');"
@@ -76,18 +78,15 @@ jobs:
         # exists. Confirmed against this exact repo: the Sigstore provenance
         # attestation step succeeded, then the actual publish PUT 404'd,
         # twice, byte-for-byte identical on a rerun -- ruling out a
-        # transient registry blip. Fix is npm >=11.5.1; pinning to `latest`
-        # here rather than a bare version so this keeps working as the OIDC
-        # requirement floor moves.
-        # Pinned to the 11.x line, not `latest`: npm 12 requires Node
+        # transient registry blip. Fix is npm >=11.5.1.
+        # npm 12 requires Node
         # >=22.22, which this job's Node 20 setup does not satisfy, so
         # `npm@latest` fails its own EBADENGINE check before it can even
         # install (confirmed: the first attempt at this fix used `latest`
-        # and failed exactly this way). Every 11.x release needs Node
-        # ^20.17.0 || >=22.9.0, which Node 20.20.2 satisfies, and 11.x
-        # already includes the OIDC fix (floor is 11.5.1; this resolves
-        # to the newest 11.x, currently 11.19.0).
-        run: npm install -g npm@11 && npm --version
+        # and failed exactly this way). npm 11.19.0 supports Node
+        # ^20.17.0 || >=22.9.0 and includes the OIDC fix. Pinning this
+        # tool avoids a new npm release changing publish behavior mid-run.
+        run: npm install -g npm@11.19.0 && npm --version
 
       - name: Publish to npm with provenance
         # No NPM_TOKEN. npm is deprecating 2FA-bypass tokens for direct
@@ -101,6 +100,20 @@ jobs:
         # registration is missing this step fails with the same E404.
         run: npm publish --provenance --access public
 
+      - name: Verify the package is available on npm
+        run: |
+          expected=$(node -p "require('./package.json').version")
+          for attempt in {1..12}; do
+            published=$(npm view "mcp-kinetic-gain@${expected}" version 2>/dev/null || true)
+            if [ "$published" = "$expected" ]; then
+              echo "npm published=mcp-kinetic-gain@${expected}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::npm did not report mcp-kinetic-gain@${expected} after publish"
+          exit 1
+
       - name: Attach SBOM to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -109,5 +122,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" sbom/cyclonedx.json --clobber
           else
-            gh release create "$TAG" sbom/cyclonedx.json --title "$TAG" --notes "See CHANGELOG.md. SBOM attached (CycloneDX 1.5)."
+            gh release create "$TAG" sbom/cyclonedx.json --title "$TAG" --notes "See CHANGELOG.md. Workspace dependency SBOM attached (CycloneDX 1.5)."
           fi

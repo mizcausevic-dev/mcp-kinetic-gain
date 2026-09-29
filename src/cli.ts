@@ -82,10 +82,18 @@ function isGitHubActions(): boolean {
   return process.env.GITHUB_ACTIONS === "true";
 }
 
+export function escapeWorkflowCommandData(value: string): string {
+  return value.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+}
+
+export function escapeWorkflowCommandProperty(value: string): string {
+  return escapeWorkflowCommandData(value).replace(/:/g, "%3A").replace(/,/g, "%2C");
+}
+
 function annotate(level: "error" | "warning", message: string, file?: string): void {
   if (!isGitHubActions()) return;
-  const fields = file ? `file=${file}` : "";
-  process.stdout.write(`::${level} ${fields}::${message}\n`);
+  const fields = file ? ` file=${escapeWorkflowCommandProperty(file)}` : "";
+  process.stdout.write(`::${level}${fields}::${escapeWorkflowCommandData(message)}\n`);
 }
 
 type ResultStatus = "pass" | "fail" | "unrecognized" | "parse-error" | "config-error";
@@ -200,7 +208,7 @@ export async function runValidate(patterns: string[]): Promise<number> {
   const files = await expandPatterns(patterns);
   if (files.length === 0) {
     process.stdout.write(`mcp-kinetic-gain validate: no files matched ${patterns.map((p) => `"${p}"`).join(", ")}\n`);
-    return 0;
+    return 1;
   }
 
   process.stdout.write(`mcp-kinetic-gain validate: ${files.length} file(s) matched\n\n`);
@@ -247,7 +255,7 @@ export async function runValidate(patterns: string[]): Promise<number> {
 
 /**
  * Dispatch argv. Returns:
- *   - { handled: false } if no subcommand matched (caller should run MCP server)
+ *   - { handled: false } if no arguments were given (caller should run MCP server)
  *   - { handled: true, exitCode: N } if a subcommand ran (caller should exit N)
  */
 export async function dispatchCli(argv: string[]): Promise<{ handled: boolean; exitCode?: number }> {
@@ -273,12 +281,6 @@ export async function dispatchCli(argv: string[]): Promise<{ handled: boolean; e
     return { handled: true, exitCode: code };
   }
 
-  // Unknown flag-like arg. Anything else (positional, unlikely path) falls
-  // through to MCP server mode so we don't surprise existing usage.
-  if (cmd.startsWith("-")) {
-    process.stderr.write(`mcp-kinetic-gain: unknown option ${cmd}\nRun \`mcp-kinetic-gain --help\` for usage.\n`);
-    return { handled: true, exitCode: 3 };
-  }
-
-  return { handled: false };
+  process.stderr.write(`mcp-kinetic-gain: unknown ${cmd.startsWith("-") ? "option" : "command"} ${cmd}\nRun \`mcp-kinetic-gain --help\` for usage.\n`);
+  return { handled: true, exitCode: 3 };
 }

@@ -2,9 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [0.9.3] - 2026-09-29
+
+Release candidate prepared locally; publication is pending.
+
+### Fixed
+
+- Block unspecified and other nonpublic IP destinations, revalidate every URL redirect, and cap remote JSON response bodies and redirects.
+- Validate Claims Decision Cards against the bundled schema and make CLI validation fail when no files match or a command is mistyped.
+- Escape GitHub Actions annotations emitted by the CLI so unusual file names cannot inject workflow commands.
+- Bound optional live audit-stream event and response sizes, reject redirects, and mark event emission as a mutating tool.
+- Update vulnerable lockfile dependencies and gate future CI/publish runs on the npm audit.
+- Pin and verify the MCP Registry publisher binary and verify the exact npm and Registry name/version during manual publication.
+- Correct public installation, tool-count, licensing, and registry-status documentation.
+
 ## [0.9.2] - 2026-08-24
 
-Security fix release.
+Security fix commit and tag. This version was not published to npm or the MCP Registry as of the 2026-09-29 review.
 
 ### Fixed
 

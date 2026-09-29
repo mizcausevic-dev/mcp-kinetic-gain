@@ -122,7 +122,13 @@ export async function handleAttestationVerify(args: {
   }
 
   if (!ok) return pretty({ ok: false, reason: "bad_signature" });
-  return pretty({ ok: true, key_url: att.key_url, signed_at: att.signed_at });
+  return pretty({
+    ok: true,
+    signature_valid_for_supplied_key: true,
+    key_identity_verified: false,
+    key_url: att.key_url,
+    signed_at: att.signed_at,
+  });
 }
 
 /**

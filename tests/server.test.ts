@@ -7,7 +7,13 @@ import { join } from "node:path";
 
 import { handlers } from "../src/server.js";
 import { __allowFetchTargetForTests, canonicalSha256, stripTrailingSlashes } from "../src/common.js";
-import { dispatchCli, runValidate, PACKAGE_VERSION } from "../src/cli.js";
+import {
+  dispatchCli,
+  escapeWorkflowCommandData,
+  escapeWorkflowCommandProperty,
+  runValidate,
+  PACKAGE_VERSION,
+} from "../src/cli.js";
 
 describe("shared URL utilities", () => {
   it("strips every trailing slash without changing internal slashes", () => {
@@ -1332,6 +1338,11 @@ describe("Unknown tool", () => {
 // CLI mode (v0.5.1)
 // ----------------------------------------------------------------------------
 describe("CLI dispatch", () => {
+  it("escapes untrusted annotation paths and messages for GitHub Actions", () => {
+    expect(escapeWorkflowCommandProperty("a%:b,c\r\nfile.json")).toBe("a%25%3Ab%2Cc%0D%0Afile.json");
+    expect(escapeWorkflowCommandData("bad%\r\n::warning::"))
+      .toBe("bad%25%0D%0A::warning::");
+  });
   it("returns handled=false when no subcommand is given (falls through to MCP server)", async () => {
     const out = await dispatchCli(["node", "server.js"]);
     expect(out.handled).toBe(false);
@@ -1360,6 +1371,11 @@ describe("CLI dispatch", () => {
     const out = await dispatchCli(["node", "server.js", "--bogus"]);
     expect(out.handled).toBe(true);
     expect(out.exitCode).toBe(3);
+  });
+
+  it("rejects an unknown command instead of starting the MCP server", async () => {
+    const out = await dispatchCli(["node", "server.js", "valdiate", "card.json"]);
+    expect(out).toEqual({ handled: true, exitCode: 3 });
   });
 
   it("exposes the package version", () => {
@@ -1417,9 +1433,9 @@ describe("CLI validate command", () => {
     expect(code).toBe(3);
   });
 
-  it("returns exit 0 (no files matched) when given a non-matching glob", async () => {
+  it("returns exit 1 when a glob matches no files", async () => {
     const code = await runValidate([join(workDir, "no-such-pattern-*.xyz")]);
-    expect(code).toBe(0);
+    expect(code).toBe(1);
   });
 
   it("aggregates: one failing file in a mixed batch makes the run fail", async () => {
@@ -1773,6 +1789,8 @@ describe("v0.6.0: attestation_inspect + attestation_verify", () => {
       }),
     );
     expect(out.ok).toBe(true);
+    expect(out.signature_valid_for_supplied_key).toBe(true);
+    expect(out.key_identity_verified).toBe(false);
   });
 });
 
