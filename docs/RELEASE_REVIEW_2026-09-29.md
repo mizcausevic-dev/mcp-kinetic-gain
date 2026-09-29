@@ -83,6 +83,7 @@ The tagged `v0.9.2` publish workflow predates the OIDC-only fix at `main`; a new
 | `git diff --check` | Exit 0 |
 | Built CLI smoke | `--version` exit 0 and reported `0.9.3`; mistyped command exit 3; unmatched glob exit 1 |
 | Publisher archive SHA-256 | Downloaded official `v1.8.1` Linux archive; digest matched GitHub release metadata |
+| `mcp-publisher v1.8.1 validate` | Exit 0; official Registry validation endpoint reported `server.json is valid`; the Windows binary's SHA-256 matched GitHub release metadata before execution |
 | Fresh remote reads | GitHub `main` `95828b1`; npm `latest` `0.9.1`; MCP Registry `latest` `0.9.1`, active |
 
 ### Remaining gates and limits

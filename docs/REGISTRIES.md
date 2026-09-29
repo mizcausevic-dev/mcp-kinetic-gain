@@ -7,7 +7,7 @@
 | GitHub `main` | `95828b11f145d1e8cbef69841bb75bccc805ca5c` | Fresh `git ls-remote origin refs/heads/main` |
 | npm `latest` | `0.9.1` | `npm view mcp-kinetic-gain version --json` |
 | Official MCP Registry `latest` | `0.9.1`, active | Exact-name `/v0.1/servers/io.github.mizcausevic-dev%2Fmcp-kinetic-gain/versions/latest` response |
-| Local release candidate | `0.9.3`, not published | `package.json`, lockfile, `server.json`, changelog, and review branch |
+| Local release candidate | `0.9.3`, not published | Version-aligned manifests; `mcp-publisher v1.8.1 validate` passed against the official Registry endpoint |
 
 The existing `v0.9.2` tag points to a commit before the OIDC-only npm publishing workflow fix. npm and the MCP Registry do not list `0.9.2` as the latest published version. Do not rewrite or rerun that tag to release this candidate. The next release needs a new reviewed commit and `v0.9.3` tag.
 
