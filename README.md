@@ -97,6 +97,13 @@ URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The ser
 
 Schema validation checks the document shape and selected rules. A passing result is not proof of FERPA, COPPA, HIPAA, FDA, EU AI Act, CMMC, or other legal compliance. `attestation_verify` checks a signature against the public key supplied by the caller; it does not establish the key owner's identity.
 
+## Start with a task
+
+- **Review a card:** pass a parsed document to `claims_card_validate`, then use `claims_card_inspect` to summarize its declared decision. Investigate any validation failure before relying on the summary.
+- **Compare drafts:** call `suite_doc_drift` with two versions of the same Suite document to see structural changes before publication.
+- **Check a signature:** call `attestation_verify` with a public key obtained through a trusted channel; separately confirm that the key belongs to the claimed signer.
+- **Record an event:** prepare the payload with `audit_event_compose`, review it for sensitive data, then call `audit_event_emit` only when the configured audit-stream service and write are approved.
+
 ## Install
 
 ```bash

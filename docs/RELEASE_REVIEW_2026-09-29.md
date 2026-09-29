@@ -77,7 +77,7 @@ The tagged `v0.9.2` publish workflow predates the OIDC-only fix at `main`; a new
 | `npm run build` | Exit 0 |
 | `npm audit --audit-level=moderate` | Exit 0; zero reported vulnerabilities after lockfile updates (baseline: five packages reported) |
 | `actionlint -color -shellcheck=` | Exit 0; ShellCheck was unavailable locally |
-| `npm pack --dry-run --ignore-scripts --json` | Exit 0; 72 files, 122286 bytes; roots limited to `dist`, `README.md`, `LICENSE`, `package.json`; `dist/server.js` present |
+| `npm pack --dry-run --ignore-scripts --json` | Exit 0; 72 files, 122518 bytes; roots limited to `dist`, `README.md`, `LICENSE`, `package.json`; `dist/server.js` present |
 | `npm sbom --sbom-format cyclonedx --sbom-type library` | Exit 0; CycloneDX 1.5 workspace inventory, 159 components, including development dependencies |
 | `gitleaks dir` and `gitleaks git` with redaction | Both exit 0 with no reported findings; no known-positive control was run, so this is not a verified-clean secret audit |
 | `git diff --check` | Exit 0 |
