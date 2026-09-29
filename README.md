@@ -2,7 +2,7 @@
 
 One **MCP server**, all twelve [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling + the DefenseTech 8-pack. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **75 tools** (47 spec + 16 implementation-preview + 8 DefenseTech + 4 AI Claims Decision Card, v0.9.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card, AI Claims Decision Card - plus hash attestation (ed25519), audit-stream event composition + chain verification (offline AND live against a running audit-stream-py via `AUDIT_STREAM_URL`), cross-spec drift detection, Decision Intelligence preview, and the DefenseTech vault resolver + invariant checkers. **New in v0.9.0**: the AI Claims Decision Card (InsurTech, `claims_card_version`) - `claims_card_validate`, `claims_card_inspect`, `claims_card_sign`, `claims_card_chain`.
 
-This is the unified read-side companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders any of the 12 specs for humans, this server exposes them as callable tools for agents.
+This is the agent-facing companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders the specs for humans, while this server exposes validation and workflow tools for agents. The optional `audit_event_emit` tool writes to a configured audit-stream service.
 
 ## Tools
 
@@ -63,12 +63,12 @@ This is the unified read-side companion to [kinetic-gain-visualizer](https://git
 - `incident_affected_walk` - Walk an Incident Card's affected block and return every
 - `incident_remediation_plan` - Map each affected URI in an Incident Card to a recommended
 - `attestation_canonical_hash` - Compute the SHA-256 canonical-JSON hash of an arbitrary value
-- `attestation_verify` - Verify an ed25519 Attestation envelope
+- `attestation_verify` - Verify an ed25519 Attestation envelope against a body and
 - `attestation_inspect` - Pretty-print an Attestation envelope with structural
 - `audit_event_compose` - Build a ready-to-POST audit-stream-py GovernanceEvent
 - `audit_chain_verify` - Walk an array of GovernanceEvents top-to-bottom and verify
 - `audit_event_inspect` - Pretty-print one GovernanceEvent with structural validation
-- `audit_event_emit` - POST one governance event to a running audit-stream-py
+- `audit_event_emit` - Writes a governance event to the audit-stream-py instance
 - `audit_events_query` - GET recent governance events from a running audit-stream-py
 - `audit_chain_verify_live` - Ask a running audit-stream-py instance to walk its own chain
 - `suite_doc_detect_spec` - Detect which Kinetic Gain Suite spec a JSON document is by
@@ -81,7 +81,7 @@ This is the unified read-side companion to [kinetic-gain-visualizer](https://git
 - `defensetech_incident_classify_event_type` - Given a freeform description of a defense-AI incident
 - `defensetech_summarize_cmmc_evidence_bundle` - Summarize a CMMC L2/L3 readiness evidence bundle: target
 - `defensetech_vault_contract_cross_binding_check` - Verify the cross_binding_refs block on a DefenseTech vault
-- `claims_card_validate` - Validate an AI Claims Decision Card (InsurTech) JSON document
+- `claims_card_validate` - Validate an AI Claims Decision Card against the bundled v0.1
 - `claims_card_inspect` - Structured summary of an AI Claims Decision Card: claim type
 - `claims_card_sign` - Compute the canonical SHA-256 hash of an AI Claims Decision
 - `claims_card_chain` - Link a new AI Claims Decision Card to its predecessor: sets
@@ -90,6 +90,19 @@ This is the unified read-side companion to [kinetic-gain-visualizer](https://git
 <!-- END TOOL CATALOG -->
 
 Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fetch tools. Specs **without** one (Prompt Provenance, AI Evidence - these usually travel inline with answers or in repos, not at fixed paths) get parse tools that take a `document_json` string.
+
+## Network and data boundaries
+
+URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. `AUDIT_STREAM_URL` optionally enables live event queries and `audit_event_emit`, which sends and persists `kind`, `source`, and `payload` at the configured service. Approve that write before calling it; avoid secrets and personal data unless the service is approved to store them. Use HTTPS for a remote audit-stream service.
+
+Schema validation checks the document shape and selected rules. A passing result is not proof of FERPA, COPPA, HIPAA, FDA, EU AI Act, CMMC, or other legal compliance. `attestation_verify` checks a signature against the public key supplied by the caller; it does not establish the key owner's identity.
+
+## Start with a task
+
+- **Review a card:** pass a parsed document to `claims_card_validate`, then use `claims_card_inspect` to summarize its declared decision. Investigate any validation failure before relying on the summary.
+- **Compare drafts:** call `suite_doc_drift` with two versions of the same Suite document to see structural changes before publication.
+- **Check a signature:** call `attestation_verify` with a public key obtained through a trusted channel; separately confirm that the key belongs to the claimed signer.
+- **Record an event:** prepare the payload with `audit_event_compose`, review it for sensitive data, then call `audit_event_emit` only when the configured audit-stream service and write are approved.
 
 ## Install
 
@@ -102,6 +115,8 @@ Or run without installing via `npx`:
 ```bash
 npx mcp-kinetic-gain
 ```
+
+For a controlled deployment, pin a reviewed package version in the client config (`mcp-kinetic-gain@<version>`) and upgrade deliberately.
 
 ## Claude Desktop config
 
@@ -148,9 +163,9 @@ The CLI auto-detects which Suite spec each file belongs to via its top-level ver
 | Code | Meaning |
 |---|---|
 | `0` | Every matched file passed validation |
-| `1` | At least one file failed validation, failed to parse, or hit a config error |
+| `1` | At least one file failed validation, failed to parse, or no files matched |
 | `2` | No file in the input matched a known Suite spec |
-| `3` | Usage error (missing arg, unknown flag) |
+| `3` | Usage error (missing arg, unknown command or flag) |
 
 Running `mcp-kinetic-gain` with **no arguments** still launches the stdio MCP server - existing Claude Desktop / Cursor configs are unaffected.
 
@@ -165,16 +180,12 @@ Running `mcp-kinetic-gain` with **no arguments** still launches the stdio MCP se
 
 ```
 src/
-├── server.ts              # MCP entrypoint, handler dispatch
+├── server.ts              # MCP entrypoint and handler dispatch
+├── cli.ts                 # JSON validation CLI
 ├── tools.ts               # 75 tool descriptors (JSON Schema inputs)
-├── schemas.ts             # zod schemas for every spec
-├── common.ts              # fetchJson, canonicalSha256, pretty
-└── handlers/
-    ├── aeo.ts
-    ├── prompt-provenance.ts
-    ├── agent-card.ts
-    ├── ai-evidence.ts
-    └── tool-card.ts
+├── schemas.ts             # Zod schemas for the 12 specs
+├── common.ts              # guarded fetch and canonical hashes
+└── handlers/              # one module per spec plus cross-spec and live tools
 ```
 
 Each handler module is independent and could be split into a separate package if needed.
@@ -192,7 +203,7 @@ If your `candidate_text` produces an unexpected mismatch, check CRLF vs LF and t
 
 ## Tests
 
-172 unit tests against an in-process Node HTTP server (no external network). Every tool's happy path + at least one error path, plus a live local-HTTP synthetic-index test for `incident_index_fetch`:
+Run the unit and local HTTP tests without an external service:
 
 ```bash
 npm install
@@ -203,7 +214,7 @@ npm run build
 
 ## License
 
-**This server: AGPL-3.0.** Reference implementation. Commercial SaaS hosts must share modifications back.
+**This server: AGPL-3.0.** If a modified version serves users over a network, the AGPL requires an offer of Corresponding Source to those users under its terms. See the [GNU AGPL FAQ](https://www.gnu.org/licenses/gpl-faq.html.en#UnreleasedModsAGPL) and [LICENSE](LICENSE).
 
 **The specs themselves: MIT.** Maximally permissive. Anyone may implement, validate against, or extend any Kinetic Gain Protocol Suite specification. The dual-license split is deliberate: the protocol stays open, the reference server is copyleft.
 
@@ -224,6 +235,7 @@ npm run build
 | Clinical AI Disclosure | HealthTech (FDA SaMD + HIPAA) |
 | AI Incident Card | Cross-cutting (EU AI Act Article 73) |
 | AI Procurement Decision Card | Cross-cutting (buyer-side, OMB M-24-10 / NIST AI RMF rubric-friendly) |
+| AI Claims Decision Card | InsurTech |
 
 **Suite hub:** [suite.kineticgain.com](https://suite.kineticgain.com/)
 **Companion visualizer:** [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer)

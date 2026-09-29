@@ -39,9 +39,9 @@ export function stripTrailingSlashes(s: string): string {
  *      "moments later" here -- the check and the connection use the same
  *      resolution, at the same time.
  *
- * Rejects RFC1918, loopback, and link-local ranges on both the literal host
- * in the URL and every address it resolves to: 127.0.0.0/8, 10.0.0.0/8,
- * 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1, fc00::/7, fe80::/10.
+ * Rejects nonpublic address ranges on both the literal host in the URL and
+ * every address it resolves to. This includes unspecified addresses such as
+ * 0.0.0.0, which can connect to a loopback listener on some hosts.
  */
 export class UnsafeFetchTargetError extends Error {
   constructor(message: string) {
@@ -60,11 +60,20 @@ function ipv4ToInt(ip: string): number {
 }
 
 const BLOCKED_IPV4: Array<{ base: number; bits: number }> = [
+  { base: ipv4ToInt("0.0.0.0"), bits: 8 }, // unspecified/current-network; can reach localhost
   { base: ipv4ToInt("127.0.0.0"), bits: 8 }, // loopback
   { base: ipv4ToInt("10.0.0.0"), bits: 8 }, // RFC1918
+  { base: ipv4ToInt("100.64.0.0"), bits: 10 }, // shared address space
   { base: ipv4ToInt("172.16.0.0"), bits: 12 }, // RFC1918
   { base: ipv4ToInt("192.168.0.0"), bits: 16 }, // RFC1918
   { base: ipv4ToInt("169.254.0.0"), bits: 16 }, // link-local
+  { base: ipv4ToInt("192.0.0.0"), bits: 24 }, // protocol assignments
+  { base: ipv4ToInt("192.0.2.0"), bits: 24 }, // documentation
+  { base: ipv4ToInt("198.18.0.0"), bits: 15 }, // benchmarking
+  { base: ipv4ToInt("198.51.100.0"), bits: 24 }, // documentation
+  { base: ipv4ToInt("203.0.113.0"), bits: 24 }, // documentation
+  { base: ipv4ToInt("224.0.0.0"), bits: 4 }, // multicast
+  { base: ipv4ToInt("240.0.0.0"), bits: 4 }, // reserved/broadcast
 ];
 
 /** Exported for direct unit testing of the range math, not just indirectly
@@ -169,15 +178,19 @@ export function isBlockedIpv6(ip: string): boolean {
     return true; // can't parse it confidently -- fail closed
   }
   if (value === 1n) return true; // ::1
-  if (ipv6InCidr(value, "fc00::", 7)) return true;
-  if (ipv6InCidr(value, "fe80::", 10)) return true;
   const embeddedIpv4 = extractEmbeddedIpv4(value);
-  if (embeddedIpv4 !== null && isBlockedIpv4(embeddedIpv4)) return true;
+  if (embeddedIpv4 !== null) return isBlockedIpv4(embeddedIpv4);
+  // Only ordinary global unicast is eligible. Tunnel and documentation
+  // prefixes are excluded because they can conceal a different destination.
+  if (!ipv6InCidr(value, "2000::", 3)) return true;
+  if (ipv6InCidr(value, "2001::", 23)) return true;
+  if (ipv6InCidr(value, "2001:db8::", 32)) return true;
+  if (ipv6InCidr(value, "2002::", 16)) return true;
   return false;
 }
 
 function isBlockedAddress(address: string, family: number): boolean {
-  return family === 4 ? isBlockedIpv4(address) : isBlockedIpv6(address);
+  return family === 4 ? isBlockedIpv4(address) : family === 6 ? isBlockedIpv6(address) : true;
 }
 
 /** A resolver is just "given a hostname, return the addresses it maps to."
@@ -252,6 +265,9 @@ export async function assertSafeFetchTarget(
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new UnsafeFetchTargetError(`scheme not allowed: ${parsed.protocol}`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new UnsafeFetchTargetError("URL credentials are not allowed");
   }
   if (testAllowedHosts.has(parsed.host)) {
     return;
@@ -334,10 +350,9 @@ const guardedAgent = new Agent({ connect: { lookup: makeGuardedLookup() } });
 
 async function readBodyWithLimit(
   response: UndiciResponse,
-  maxBytes: number | undefined,
+  maxBytes: number,
   controller: AbortController,
 ): Promise<string> {
-  if (maxBytes === undefined) return response.text();
   const contentLengthHeader = response.headers.get("content-length");
   if (contentLengthHeader && Number(contentLengthHeader) > maxBytes) {
     controller.abort();
@@ -362,31 +377,45 @@ async function readBodyWithLimit(
   return out;
 }
 
-/**
- * @param maxBytes Optional hard cap on response body size, enforced against
- *   both a lying/missing Content-Length and the actual bytes read. Omit for
- *   the historical unlimited behavior every existing caller relies on;
- *   pass it explicitly for a specific call site that needs it (aeo_fetch).
- */
+const DEFAULT_MAX_RESPONSE_BYTES = 1_000_000;
+const MAX_REDIRECTS = 5;
+
+/** Fetch JSON with bounded redirects and a hard response-body limit. */
 export async function fetchJson(
   url: string,
   timeoutMs = 10_000,
-  maxBytes?: number,
+  maxBytes = DEFAULT_MAX_RESPONSE_BYTES,
 ): Promise<unknown> {
-  await assertSafeFetchTarget(url);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new RangeError("maxBytes must be a positive safe integer");
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await undiciFetch(url, {
-      headers: { Accept: ACCEPT_HEADER },
-      signal: controller.signal,
-      dispatcher: guardedAgent,
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText} (${url})`);
+    let target = url;
+    for (let redirects = 0; ; redirects += 1) {
+      await assertSafeFetchTarget(target);
+      const response = await undiciFetch(target, {
+        headers: { Accept: ACCEPT_HEADER },
+        signal: controller.signal,
+        dispatcher: guardedAgent,
+        redirect: "manual",
+      });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        await response.body?.cancel();
+        if (!location) throw new Error(`redirect is missing Location (${target})`);
+        if (redirects >= MAX_REDIRECTS) throw new Error(`too many redirects (${target})`);
+        target = new URL(location, target).href;
+        continue;
+      }
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new Error(`HTTP ${response.status} ${response.statusText} (${target})`);
+      }
+      const text = await readBodyWithLimit(response, maxBytes, controller);
+      return JSON.parse(text);
     }
-    const text = await readBodyWithLimit(response, maxBytes, controller);
-    return JSON.parse(text);
   } finally {
     clearTimeout(timer);
   }

@@ -21,11 +21,29 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Verify npm package and manifest identity
+        run: |
+          node -e "const p=require('./package.json'), s=require('./server.json'), q=s.packages?.[0]; if (p.name!==q?.identifier || p.mcpName!==s.name || p.version!==s.version || q.version!==s.version) process.exit(1)"
+          name=$(node -p "require('./server.json').packages[0].identifier")
+          expected=$(node -p "require('./server.json').version")
+          published=$(npm view "${name}@${expected}" version)
+          echo "npm published=${published} expected=${expected}"
+          test "$published" = "$expected"
 
       - name: Install mcp-publisher
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          curl -fsSLo mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz"
+          echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher.tar.gz" | sha256sum --check --strict
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
           ./mcp-publisher --version
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate
 
       - name: Login via GitHub OIDC
         run: ./mcp-publisher login github-oidc
@@ -35,9 +53,17 @@ jobs:
 
       - name: Verify registry advanced
         run: |
-          sleep 10
-          latest=$(curl -fsS 'https://registry.modelcontextprotocol.io/v0/servers?search=kinetic' \
-            | python3 -c "import json,sys;d=json.load(sys.stdin);print([s['server']['version'] for s in d['servers'] if s.get('_meta',{}).get('io.modelcontextprotocol.registry/official',{}).get('isLatest')][0])")
+          name=$(node -p "require('./server.json').name")
           expected=$(python3 -c "import json;print(json.load(open('server.json'))['version'])")
-          echo "registry latest=$latest expected=$expected"
-          test "$latest" = "$expected"
+          encoded=$(python3 -c "import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=''))" "$name")
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/${encoded}/versions/latest"
+          for attempt in {1..12}; do
+            if curl -fsS "$url" -o registry-latest.json && \
+              python3 -c "import json,sys;d=json.load(open('registry-latest.json'))['server'];sys.exit(0 if (d['name'],d['version'])==(sys.argv[1],sys.argv[2]) else 1)" "$name" "$expected"; then
+              echo "registry latest=${name}@${expected}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Registry did not report ${name}@${expected} as latest"
+          exit 1

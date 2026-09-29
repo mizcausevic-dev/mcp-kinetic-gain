@@ -53,8 +53,8 @@ function validCard(): Record<string, any> {
       reviewer_ref: "RV-1",
     },
     attestation: {
-      card_hash: "IGNORED",
-      signature: "IGNORED",
+      card_hash: "a".repeat(64),
+      signature: "b".repeat(128),
       algorithm: "ed25519",
       signing_key_id: "k1",
       signed_at: "2026-06-02T00:00:00Z",
@@ -99,6 +99,25 @@ describe("claims_card_validate", () => {
     const out = parse(await handleClaimsCardValidate({ document: card }));
     expect(out.valid).toBe(false);
     expect(out.reason).toMatch(/outcome/);
+  });
+
+  it("rejects a superficially complete card that violates the bundled schema", async () => {
+    const card = validCard();
+    card.claims_card_version = "bogus";
+    card.claim = {};
+    card.governance = {};
+    const out = parse(await handleClaimsCardValidate({ document: card }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/claims_card_version/);
+  });
+
+  it("rejects malformed attestation and evidence fields", async () => {
+    const card = validCard();
+    card.attestation.signature = "not-a-signature";
+    card.evidence_bundle.sources[0].retrieval_confidence = 3;
+    const out = parse(await handleClaimsCardValidate({ document: card }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/evidence_bundle|attestation/);
   });
 });
 

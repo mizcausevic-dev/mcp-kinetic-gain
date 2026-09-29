@@ -3,6 +3,8 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { Agent, fetch as undiciFetch } from "undici";
 
 import {
+  __allowFetchTargetForTests,
+  __clearFetchTargetAllowlistForTests,
   assertSafeFetchTarget,
   fetchJson,
   isBlockedIpv4,
@@ -24,6 +26,14 @@ describe("isBlockedIpv4", () => {
       "192.168.255.255",
       "169.254.169.254", // cloud metadata endpoint -- the canonical SSRF target
       "169.254.0.1",
+      "0.0.0.0", // reaches a loopback listener on some hosts
+      "0.255.255.255",
+      "100.64.0.1",
+      "100.127.255.254",
+      "192.0.2.1",
+      "198.18.0.1",
+      "224.0.0.1",
+      "255.255.255.255",
     ];
     for (const ip of blocked) expect(isBlockedIpv4(ip), ip).toBe(true);
   });
@@ -52,8 +62,9 @@ describe("isBlockedIpv4", () => {
 });
 
 describe("isBlockedIpv6", () => {
-  it("blocks ::1, fc00::/7, and fe80::/10", () => {
+  it("blocks unspecified, loopback, local, and nonpublic IPv6 ranges", () => {
     const blocked: string[] = [
+      "::", // reaches a loopback listener on some hosts
       "::1",
       "fc00::1",
       "fd12:3456:789a::1",
@@ -61,17 +72,11 @@ describe("isBlockedIpv6", () => {
       "fe80::1", // link-local -- the range this task adds
       "fe80::",
       "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff", // top edge of fe80::/10
+      "fec0::1", // deprecated site-local
+      "2001:db8::1", // documentation
+      "2002::1", // 6to4 tunnel
     ];
     for (const ip of blocked) expect(isBlockedIpv6(ip), ip).toBe(true);
-  });
-
-  it("does not block addresses just outside fe80::/10 or fc00::/7", () => {
-    const allowed: string[] = [
-      "fbff::1", // just below fc00::/7
-      "fec0::1", // just above fe80::/10 (old deprecated site-local, not link-local)
-      "::", // unspecified address, not ::1
-    ];
-    for (const ip of allowed) expect(isBlockedIpv6(ip), ip).toBe(false);
   });
 
   it("does not block real public IPv6 addresses", () => {
@@ -119,7 +124,9 @@ describe("assertSafeFetchTarget", () => {
 
   it("rejects literal blocked IPs without needing DNS at all", async () => {
     await expect(assertSafeFetchTarget("http://127.0.0.1/")).rejects.toThrow(/blocked/);
+    await expect(assertSafeFetchTarget("http://0.0.0.0/")).rejects.toThrow(/blocked/);
     await expect(assertSafeFetchTarget("http://169.254.169.254/latest/meta-data/")).rejects.toThrow(/blocked/);
+    await expect(assertSafeFetchTarget("http://[::]/")).rejects.toThrow(/blocked/);
     await expect(assertSafeFetchTarget("http://[::1]/")).rejects.toThrow(/blocked/);
     await expect(assertSafeFetchTarget("http://[fe80::1]/")).rejects.toThrow(/blocked/);
   });
@@ -143,6 +150,10 @@ describe("assertSafeFetchTarget", () => {
   it("allows a hostname that resolves to a public address", async () => {
     const resolver: AddressResolver = async () => [{ address: "93.184.216.34", family: 4 }];
     await expect(assertSafeFetchTarget("http://public.test/", resolver)).resolves.not.toThrow();
+  });
+
+  it("rejects credentials embedded in a URL", async () => {
+    await expect(assertSafeFetchTarget("https://user:pass@example.com/")).rejects.toThrow(/credentials/);
   });
 });
 
@@ -235,5 +246,48 @@ describe("DNS rebinding: connect-time re-validation, not a cached earlier check"
     // noticing. The literal-IP path doesn't need DNS at all, so it isn't
     // sensitive to the production resolver's real-world behavior.
     await expect(fetchJson("http://127.0.0.1:1/")).rejects.toThrow(/blocked/);
+    await expect(fetchJson("http://0.0.0.0:1/")).rejects.toThrow(/blocked/);
+  });
+});
+
+describe("fetchJson response boundaries", () => {
+  it("rechecks redirected targets before connecting to a local listener", async () => {
+    const hits: string[] = [];
+    const server = createServer((req, res) => {
+      hits.push(req.url ?? "");
+      if (req.url === "/start") {
+        res.writeHead(302, { Location: `http://0.0.0.0:${(server.address() as { port: number }).port}/private` });
+        res.end();
+      } else {
+        res.setHeader("content-type", "application/json");
+        res.end('{"local":true}');
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    __allowFetchTargetForTests(`127.0.0.1:${port}`);
+    try {
+      await expect(fetchJson(`http://127.0.0.1:${port}/start`)).rejects.toThrow(/blocked/);
+      expect(hits).toEqual(["/start"]);
+    } finally {
+      __clearFetchTargetAllowlistForTests();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("caps response bytes even when the caller omits a limit", async () => {
+    const server = createServer((_req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ content: "x".repeat(1_000_001) }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    __allowFetchTargetForTests(`127.0.0.1:${port}`);
+    try {
+      await expect(fetchJson(`http://127.0.0.1:${port}/large`)).rejects.toThrow(/byte limit/);
+    } finally {
+      __clearFetchTargetAllowlistForTests();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

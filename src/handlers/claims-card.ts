@@ -17,6 +17,7 @@
 import { createHash } from "node:crypto";
 
 import { pretty } from "../common.js";
+import { claimsCardSchema } from "../schemas.js";
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -47,41 +48,17 @@ type AnyRecord = Record<string, any>;
 // ---------------------------------------------------------------------------
 export async function handleClaimsCardValidate(args: { document: AnyRecord }): Promise<string> {
   const d = args?.document;
-  if (d === null || typeof d !== "object" || Array.isArray(d)) {
-    return pretty({ valid: false, reason: "`document` must be a JSON object" });
-  }
-
-  if (d.claims_card_version === undefined) {
-    return pretty({ valid: false, reason: "missing `claims_card_version` (is this a Claims Decision Card?)" });
-  }
-
-  const requiredTop = ["claim", "decision", "evidence_bundle", "governance", "attestation", "disclaimer"];
-  for (const key of requiredTop) {
-    if (d[key] === undefined) {
-      return pretty({ valid: false, reason: `missing required top-level key: ${key}` });
-    }
-  }
-
-  const validOutcomes = ["approve", "deny", "pend", "refer"];
-  if (!validOutcomes.includes(d.decision?.outcome)) {
-    return pretty({
-      valid: false,
-      reason: `decision.outcome must be one of ${validOutcomes.join(", ")}`,
-    });
-  }
-
-  if (!Array.isArray(d.evidence_bundle?.sources) || d.evidence_bundle.sources.length === 0) {
-    return pretty({ valid: false, reason: "evidence_bundle.sources must be a non-empty array" });
-  }
-
-  if (typeof d.disclaimer !== "string" || d.disclaimer.length === 0) {
-    return pretty({ valid: false, reason: "disclaimer must be a non-empty string" });
+  const parsed = claimsCardSchema.safeParse(d);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const path = issue?.path.join(".") || "document";
+    return pretty({ valid: false, reason: `${path}: ${issue?.message ?? "invalid Claims Decision Card"}` });
   }
 
   return pretty({
     valid: true,
-    claims_card_id: d.claim?.claim_id,
-    version: d.claims_card_version,
+    claims_card_id: parsed.data.claim.claim_id,
+    version: parsed.data.claims_card_version,
   });
 }
 

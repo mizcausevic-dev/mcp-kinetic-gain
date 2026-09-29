@@ -706,7 +706,7 @@ export const toolDescriptors = [
   {
     name: "attestation_verify",
     description:
-      "Verify an ed25519 Attestation envelope (algorithm/signed_hash/signature/key_url/signed_at) against a body and a public key. Recomputes the canonical hash, checks it matches signed_hash, then verifies the ed25519 signature over the hash string. Returns { ok, reason? }. Public key accepted as 64-char hex or base64.",
+      "Verify an ed25519 Attestation envelope against a body and caller-supplied public key. Recomputes the canonical hash and verifies the signature over the hash string. Does not verify that the supplied key belongs to the claimed key_url or signer. Public key accepted as 64-char hex or base64.",
     inputSchema: {
       type: "object",
       required: ["attestation", "body", "public_key"],
@@ -802,7 +802,13 @@ export const toolDescriptors = [
   {
     name: "audit_event_emit",
     description:
-      "POST one governance event to a running audit-stream-py instance (env var AUDIT_STREAM_URL). The server assigns event_id/timestamp/prev_hash/hash; the caller provides kind + source + payload. Use when Claude needs to record a governance moment from inside a chat (e.g. a manual override, a human-approved exception, an out-of-band incident). Returns the persisted event as audit-stream-py wrote it. Requires AUDIT_STREAM_URL in the MCP server's environment; returns a structured error otherwise.",
+      "Writes a governance event to the audit-stream-py instance configured by AUDIT_STREAM_URL. This sends kind, source, and payload to that service and persists them there. Obtain the user's approval before recording an event; omit secrets and personal data unless the service is approved for them. The server assigns event_id/timestamp/prev_hash/hash. Returns the persisted event or a structured error when unconfigured.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       required: ["kind", "source"],
@@ -1016,7 +1022,7 @@ export const toolDescriptors = [
   {
     name: "claims_card_validate",
     description:
-      "Validate an AI Claims Decision Card (InsurTech) JSON document against the v0.1 spec. Checks the claims_card_version detection key, required top-level keys, decision.outcome enum, a non-empty evidence_bundle.sources, and the disclaimer. Returns { valid, claims_card_id, version } or { valid: false, reason }.",
+      "Validate an AI Claims Decision Card against the bundled v0.1 structural schema, including required fields, enums, ranges, and attestation field shapes. Returns the first schema issue or { valid, claims_card_id, version }. This does not verify signatures, evidence authenticity, the coverage decision, or legal compliance.",
     inputSchema: {
       type: "object",
       required: ["document"],

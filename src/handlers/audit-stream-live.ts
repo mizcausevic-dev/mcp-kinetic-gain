@@ -19,6 +19,8 @@
 import { pretty } from "../common.js";
 
 const DEFAULT_TIMEOUT_MS = 5_000;
+const MAX_RESPONSE_BYTES = 1_000_000;
+const MAX_EVENT_BYTES = 64_000;
 
 function baseUrl(): string | null {
   const raw = (process.env.AUDIT_STREAM_URL ?? "").trim();
@@ -37,11 +39,34 @@ function notConfigured(): string {
 async function fetchWithTimeout(
   url: string,
   init: RequestInit & { timeoutMs?: number },
-): Promise<Response> {
+): Promise<{ ok: boolean; status: number; text: string }> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), init.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
+    // A configured audit-stream origin must never forward event payloads or
+    // returned event data to a different origin through a redirect.
+    const resp = await fetch(url, { ...init, signal: ctrl.signal, redirect: "error" });
+    const contentLength = resp.headers.get("content-length");
+    if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) {
+      ctrl.abort();
+      throw new Error(`audit-stream response exceeds ${MAX_RESPONSE_BYTES} byte limit`);
+    }
+    const reader = resp.body?.getReader();
+    if (!reader) return { ok: resp.ok, status: resp.status, text: "" };
+    const decoder = new TextDecoder();
+    let received = 0;
+    let text = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > MAX_RESPONSE_BYTES) {
+        ctrl.abort();
+        throw new Error(`audit-stream response exceeds ${MAX_RESPONSE_BYTES} byte limit`);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return { ok: resp.ok, status: resp.status, text: text + decoder.decode() };
   } finally {
     clearTimeout(t);
   }
@@ -69,21 +94,24 @@ export async function handleAuditEventEmit(args: {
     typeof args.payload === "object" && args.payload !== null && !Array.isArray(args.payload)
       ? (args.payload as Record<string, unknown>)
       : {};
+  const body = JSON.stringify({ kind: args.kind, source: args.source, payload });
+  if (Buffer.byteLength(body, "utf8") > MAX_EVENT_BYTES) {
+    return pretty({ error: `event exceeds ${MAX_EVENT_BYTES} byte limit` });
+  }
 
   try {
     const resp = await fetchWithTimeout(`${url}/events`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: args.kind, source: args.source, payload }),
+      body,
     });
-    const text = await resp.text();
     if (!resp.ok) {
       return pretty({
         error: `audit-stream returned HTTP ${resp.status}`,
-        body: tryJson(text),
+        body: tryJson(resp.text),
       });
     }
-    return pretty({ ok: true, event: tryJson(text) });
+    return pretty({ ok: true, event: tryJson(resp.text) });
   } catch (err) {
     return pretty({
       error: "failed to reach audit-stream",
@@ -123,14 +151,13 @@ export async function handleAuditEventsQuery(args: {
   const target = params.size > 0 ? `${url}/events?${params.toString()}` : `${url}/events`;
   try {
     const resp = await fetchWithTimeout(target, { method: "GET" });
-    const text = await resp.text();
     if (!resp.ok) {
       return pretty({
         error: `audit-stream returned HTTP ${resp.status}`,
-        body: tryJson(text),
+        body: tryJson(resp.text),
       });
     }
-    const events = tryJson(text);
+    const events = tryJson(resp.text);
     const count = Array.isArray(events) ? events.length : null;
     return pretty({ ok: true, count, events });
   } catch (err) {
@@ -153,14 +180,13 @@ export async function handleAuditChainVerifyLive(_args: Record<string, never>): 
   if (!url) return notConfigured();
   try {
     const resp = await fetchWithTimeout(`${url}/verify`, { method: "GET" });
-    const text = await resp.text();
     if (!resp.ok) {
       return pretty({
         error: `audit-stream returned HTTP ${resp.status}`,
-        body: tryJson(text),
+        body: tryJson(resp.text),
       });
     }
-    return pretty(tryJson(text));
+    return pretty(tryJson(resp.text));
   } catch (err) {
     return pretty({
       error: "failed to reach audit-stream",
