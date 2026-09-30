@@ -4,7 +4,8 @@ All notable changes to this project are documented here.
 
 ## [0.9.3] - 2026-09-29
 
-Release candidate prepared locally; publication is pending.
+Published to npm and the official MCP Registry. The GitHub Release includes a
+CycloneDX workspace dependency SBOM.
 
 ### Fixed
 
