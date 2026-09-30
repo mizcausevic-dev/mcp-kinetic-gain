@@ -104,8 +104,13 @@ jobs:
         run: |
           expected=$(node -p "require('./package.json').version")
           for attempt in {1..12}; do
-            published=$(npm view "mcp-kinetic-gain@${expected}" version 2>/dev/null || true)
-            if [ "$published" = "$expected" ]; then
+            # During v0.9.3, npm view kept returning 404 after publication
+            # while a fresh exact-version registry request succeeded. Fetch
+            # that public record with a fresh URL on each attempt.
+            if curl -fsS --max-time 15 -H 'Cache-Control: no-cache' \
+              "https://registry.npmjs.org/mcp-kinetic-gain/${expected}?check=${attempt}" \
+              -o published-package.json && \
+              EXPECTED="$expected" node -e 'const d=require("./published-package.json"); process.exit(d.name==="mcp-kinetic-gain" && d.version===process.env.EXPECTED && Boolean(d.dist?.integrity) && Boolean(d.dist?.attestations?.provenance) ? 0 : 1)'; then
               echo "npm published=mcp-kinetic-gain@${expected}"
               exit 0
             fi
