@@ -1,5 +1,7 @@
 # Release review, 2026-09-29
 
+This records the pre-release review. The authorized release outcome is appended below and summarized in [REGISTRIES.md](REGISTRIES.md).
+
 ## Goal
 
 Make the next `mcp-kinetic-gain` release reviewable and safe to publish without deploying in this session.
@@ -55,9 +57,9 @@ No deployment is authorized for this session. A future release needs a new versi
 
 The tagged `v0.9.2` publish workflow predates the OIDC-only fix at `main`; a new release must use a new version/tag. Existing `v0.9.2` history will not be changed.
 
-## Outcome
+## Outcome at the review checkpoint
 
-**BLOCKED for production publication.** The local candidate passes the checks below, but it has not run in GitHub CI on Node 20/22, the npm Trusted Publisher account setting was not visible, and no `0.9.3` npm or MCP Registry release was authorized or executed. A successful CodeQL run on the old `main` commit is not evidence for this candidate.
+**BLOCKED for production publication at this checkpoint.** The local candidate passed the checks below, but it had not run in GitHub CI on Node 20/22, the npm Trusted Publisher account setting was not visible, and no `0.9.3` npm or MCP Registry release was authorized or executed. A successful CodeQL run on the old `main` commit was not evidence for this candidate.
 
 ### Fixes made
 
@@ -93,3 +95,13 @@ The tagged `v0.9.2` publish workflow predates the OIDC-only fix at `main`; a new
 - Run the manual MCP Registry workflow only after npm is live and verify the exact public Registry record. No release workflow was triggered here.
 - The optional live audit-stream tools were tested against local HTTP fixtures, not a production audit-stream instance. Its authorization, retention, and approval handling remain deployment-specific. MCP annotations inform clients but do not enforce human approval.
 - No browser interface exists in this package, so browser and screen-reader UI checks were not applicable. Public Suite-site copy was not changed in this repository.
+
+## Release follow-up, 2026-09-30 UTC
+
+**Released and independently checked.** [PR #43](https://github.com/mizcausevic-dev/mcp-kinetic-gain/pull/43) merged as `0d405133c194f5a2489e2804a44dec8d55b30d5e` after Node 20/22 CI, actionlint, and CodeQL passed. The same checks and OpenSSF Scorecard passed on the merged main commit. The npm package settings showed the approved Trusted Publisher connection for `mizcausevic-dev/mcp-kinetic-gain`, workflow `publish.yml`, with `npm publish` permitted.
+
+The new `v0.9.3` tag points to that merge commit. The [tag workflow](https://github.com/mizcausevic-dev/mcp-kinetic-gain/actions/runs/36647695364) passed its audit, typecheck, 201 tests, build, SBOM generation, and OIDC `npm publish --provenance` steps. It then failed when `npm view` kept returning 404 during its post-publish polling, so it did not attach the SBOM. The version was not republished or retagged. A fresh direct npm version request reported `0.9.3`, matching tarball integrity and provenance metadata, and a clean exact-version install reported `mcp-kinetic-gain v0.9.3`. A stdio MCP client connected to that installed package, listed 75 tools, found the mutating annotation on `audit_event_emit`, and rejected a malformed Claims Card. `npm audit signatures` exited 0 with 115 verified registry signatures and 14 verified attestations. The published tarball has 72 files, 122518 bytes, and the same integrity value as the reviewed dry run.
+
+The [GitHub Release](https://github.com/mizcausevic-dev/mcp-kinetic-gain/releases/tag/v0.9.3) was created separately with a CycloneDX 1.5 workspace dependency SBOM (159 components); its published asset SHA-256 matched the generated file. The [MCP Registry workflow](https://github.com/mizcausevic-dev/mcp-kinetic-gain/actions/runs/36647990242) exited 0, and a separate exact-name public Registry read reported server and npm package version `0.9.3`. npm `latest` also reported `0.9.3`.
+
+The follow-up workflow change replaces cached `npm view` polling with fresh exact-version registry requests. Residual limits remain: the optional audit-stream service was tested against local fixtures, not a production instance; MCP annotations do not enforce human approval; and no browser UI exists to test. If a defect is found in the published package, publish a fixed version and deprecate `0.9.3` rather than rewriting its tag or package.
