@@ -12,9 +12,9 @@
  *   - Ask audit-stream-py whether its chain is still intact
  *     (GET {AUDIT_STREAM_URL}/verify)
  *
- * The base URL comes from the `AUDIT_STREAM_URL` env var the rest of the
- * suite already uses. When unset, every tool returns a structured error
- * the agent can read and surface to the user.
+ * The base URL and bearer token come from AUDIT_STREAM_URL and
+ * AUDIT_STREAM_TOKEN. Both are required for live calls; offline tools do not
+ * need either setting.
  */
 import { pretty } from "../common.js";
 
@@ -22,18 +22,27 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_RESPONSE_BYTES = 1_000_000;
 const MAX_EVENT_BYTES = 64_000;
 
-function baseUrl(): string | null {
+function connection(): { url: string; token: string } | { error: string } {
   const raw = (process.env.AUDIT_STREAM_URL ?? "").trim();
-  if (!raw) return null;
-  return raw.replace(/\/+$/, "");
-}
-
-function notConfigured(): string {
-  return pretty({
-    error: "AUDIT_STREAM_URL is not set",
-    detail:
-      "Point this tool at your audit-stream-py instance by setting the AUDIT_STREAM_URL env var (e.g. http://audit-stream:8093) in the MCP server's environment, then restart the client.",
-  });
+  if (!raw) return { error: "AUDIT_STREAM_URL is not set" };
+  const token = process.env.AUDIT_STREAM_TOKEN ?? "";
+  // Match the audit-stream-py bearer-token contract. Never echo this value.
+  if (!/^[!-~]{32,}$/.test(token)) {
+    return { error: "AUDIT_STREAM_TOKEN must be set to at least 32 visible ASCII characters" };
+  }
+  try {
+    const target = new URL(raw);
+    if (target.username || target.password || target.search || target.hash) {
+      return { error: "AUDIT_STREAM_URL must not contain credentials, a query, or a fragment" };
+    }
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(target.hostname);
+    if (target.protocol !== "https:" && !(target.protocol === "http:" && loopback)) {
+      return { error: "AUDIT_STREAM_URL must use HTTPS, or HTTP on loopback" };
+    }
+    return { url: target.href.replace(/\/+$/, ""), token };
+  } catch {
+    return { error: "AUDIT_STREAM_URL is invalid" };
+  }
 }
 
 async function fetchWithTimeout(
@@ -82,13 +91,16 @@ export async function handleAuditEventEmit(args: {
   source: unknown;
   payload?: unknown;
 }): Promise<string> {
-  const url = baseUrl();
-  if (!url) return notConfigured();
+  const config = connection();
+  if ("error" in config) return pretty(config);
   if (typeof args.kind !== "string" || !args.kind) {
     return pretty({ error: "`kind` is required and must be a non-empty string" });
   }
   if (typeof args.source !== "string" || !args.source) {
     return pretty({ error: "`source` is required and must be a non-empty string" });
+  }
+  if (args.source.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(args.source)) {
+    return pretty({ error: "`source` must be an ASCII service identifier of at most 128 characters" });
   }
   const payload =
     typeof args.payload === "object" && args.payload !== null && !Array.isArray(args.payload)
@@ -100,22 +112,19 @@ export async function handleAuditEventEmit(args: {
   }
 
   try {
-    const resp = await fetchWithTimeout(`${url}/events`, {
+    const resp = await fetchWithTimeout(`${config.url}/events`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${config.token}` },
       body,
     });
     if (!resp.ok) {
-      return pretty({
-        error: `audit-stream returned HTTP ${resp.status}`,
-        body: tryJson(resp.text),
-      });
+      return pretty({ error: `audit-stream returned HTTP ${resp.status}` });
     }
     return pretty({ ok: true, event: tryJson(resp.text) });
   } catch (err) {
     return pretty({
       error: "failed to reach audit-stream",
-      detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      detail: safeRequestError(err),
     });
   }
 }
@@ -131,31 +140,35 @@ export async function handleAuditEventsQuery(args: {
   limit?: unknown;
   since_id?: unknown;
 }): Promise<string> {
-  const url = baseUrl();
-  if (!url) return notConfigured();
+  const config = connection();
+  if ("error" in config) return pretty(config);
+  if (args.since_id !== undefined) {
+    return pretty({ error: "audit-stream-py does not support since_id on GET /events" });
+  }
+  if (args.kind && args.source) {
+    return pretty({ error: "audit-stream-py does not combine kind and source filters" });
+  }
+  if (
+    args.limit !== undefined &&
+    (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1 || args.limit > 1_000)
+  ) {
+    return pretty({ error: "`limit` must be an integer in 1..1000" });
+  }
 
   const params = new URLSearchParams();
   if (typeof args.kind === "string" && args.kind) params.set("kind", args.kind);
   if (typeof args.source === "string" && args.source) params.set("source", args.source);
-  if (typeof args.limit === "number" && Number.isInteger(args.limit) && args.limit > 0) {
+  if (typeof args.limit === "number") {
     params.set("limit", String(args.limit));
   }
-  if (
-    typeof args.since_id === "number" &&
-    Number.isInteger(args.since_id) &&
-    args.since_id >= 0
-  ) {
-    params.set("since_id", String(args.since_id));
-  }
-
-  const target = params.size > 0 ? `${url}/events?${params.toString()}` : `${url}/events`;
+  const target = params.size > 0 ? `${config.url}/events?${params.toString()}` : `${config.url}/events`;
   try {
-    const resp = await fetchWithTimeout(target, { method: "GET" });
+    const resp = await fetchWithTimeout(target, {
+      method: "GET",
+      headers: { authorization: `Bearer ${config.token}` },
+    });
     if (!resp.ok) {
-      return pretty({
-        error: `audit-stream returned HTTP ${resp.status}`,
-        body: tryJson(resp.text),
-      });
+      return pretty({ error: `audit-stream returned HTTP ${resp.status}` });
     }
     const events = tryJson(resp.text);
     const count = Array.isArray(events) ? events.length : null;
@@ -163,7 +176,7 @@ export async function handleAuditEventsQuery(args: {
   } catch (err) {
     return pretty({
       error: "failed to reach audit-stream",
-      detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      detail: safeRequestError(err),
     });
   }
 }
@@ -174,23 +187,33 @@ export async function handleAuditEventsQuery(args: {
  * events are truthful, authorized, complete, or legally compliant.
  */
 export async function handleAuditChainVerifyLive(_args: Record<string, never>): Promise<string> {
-  const url = baseUrl();
-  if (!url) return notConfigured();
+  const config = connection();
+  if ("error" in config) return pretty(config);
   try {
-    const resp = await fetchWithTimeout(`${url}/verify`, { method: "GET" });
+    const resp = await fetchWithTimeout(`${config.url}/verify`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${config.token}` },
+    });
     if (!resp.ok) {
-      return pretty({
-        error: `audit-stream returned HTTP ${resp.status}`,
-        body: tryJson(resp.text),
-      });
+      return pretty({ error: `audit-stream returned HTTP ${resp.status}` });
     }
     return pretty(tryJson(resp.text));
   } catch (err) {
     return pretty({
       error: "failed to reach audit-stream",
-      detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      detail: safeRequestError(err),
     });
   }
+}
+
+function safeRequestError(err: unknown): string {
+  if (err instanceof Error && err.message.startsWith("audit-stream response exceeds ")) {
+    return err.message;
+  }
+  if (err instanceof Error && err.name === "AbortError") return "request timed out";
+  // fetch errors can include implementation-specific request details. Do not
+  // return those details to an MCP client when the request carried a secret.
+  return "connection failed";
 }
 
 function tryJson(text: string): unknown {

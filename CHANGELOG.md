@@ -2,8 +2,10 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## [0.10.0] - Unreleased candidate
 
+- Migration from 0.9.3: use a new `v0.10.0` tag only after this candidate is reviewed and merged. Replace `occurred_at` with `discovered_at` when calling `defensetech_check_dfars_72h_clock`; configure both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` for live audit tools; stop passing unsupported `since_id` to `audit_events_query` and use one filter at a time. No change to the offline audit tools.
+- Require the audit-stream service's bearer token for all three live audit tools, refuse remote plaintext or URL-embedded credentials, and suppress untrusted error details. Remove the unsupported `since_id` query option and reject combined kind/source filters rather than returning incomplete results. Live audit use now requires both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN`; existing URL-only configurations fail closed.
 - Fail closed when a positive Decision Card is passed to the local policy-bundle preview. Access grants require the live policy engine's trusted buyer attestation, scoped vendor and action, and effective-window checks.
 - Reject unknown or incomparable DefenseTech human-user requirements, invalid discovery and filing timestamps, pre-discovery filings, ITAR foreign-person claims without a tokenized license, and non-HTTPS cross-binding references.
 - **Breaking input change:** `defensetech_check_dfars_72h_clock` now requires `discovered_at` instead of `occurred_at`. The event invariant requires `event.discovered_at`; an event's `timestamp` does not establish discovery. DFARS 252.204-7012 defines the 72-hour period from discovery: https://www.acquisition.gov/dfars/252.204-7012-safeguarding-covered-defense-information-and-cyber-incident-reporting.

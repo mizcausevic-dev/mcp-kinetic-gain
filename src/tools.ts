@@ -802,7 +802,7 @@ export const toolDescriptors = [
   {
     name: "audit_event_emit",
     description:
-      "Writes a governance event to the audit-stream-py instance configured by AUDIT_STREAM_URL. This sends kind, source, and payload to that service and persists them there. Obtain the user's approval before recording an event; omit secrets and personal data unless the service is approved for them. The server assigns event_id/timestamp/prev_hash/hash. Returns the persisted event or a structured error when unconfigured.",
+      "Writes a governance event to the audit-stream-py instance configured by AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN. This sends kind, caller-asserted source, and payload to that service and persists them there. The bearer token authenticates this MCP process, not the claimed producer or tenant. Obtain the user's approval before recording an event; omit secrets and personal data unless the service is approved for them. The server assigns event_id/timestamp/prev_hash/hash. Returns the persisted event or a structured error when unconfigured.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -817,12 +817,14 @@ export const toolDescriptors = [
         kind: {
           type: "string",
           description:
-            "Event kind. Conventionally snake_case; matches the event kinds emitted by Kinetic Gain producers (decision_card_drafted, request_denied, breaker_opened, slo_burn_started, attestation_failed, watch_drifted, ...). Use 'other' for ad-hoc kinds not yet in the producer catalogue.",
+            "The audit-stream-py service accepts only its declared event kinds (for example decision_card_drafted, request_denied, or watch_drifted). Use 'other' for ad-hoc kinds; unknown values are rejected by the sink.",
         },
         source: {
           type: "string",
+          maxLength: 128,
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
           description:
-            "Who's emitting. Use a stable producer identifier (e.g. 'mcp-kinetic-gain', 'manual', or one of the suite producer names).",
+            "Caller-asserted ASCII producer label, not an authenticated identity. Use a stable identifier such as 'mcp-kinetic-gain' or 'manual'; do not claim another producer's identity without evidence.",
         },
         payload: {
           type: "object",
@@ -834,7 +836,7 @@ export const toolDescriptors = [
   {
     name: "audit_events_query",
     description:
-      "GET recent governance events from a running audit-stream-py instance (env var AUDIT_STREAM_URL), with optional server-side filters. Use to surface the last N denies, attestation failures, breaker trips, contract incompatibilities, or any other governance moment a user is investigating. Returns the events array plus a `count` field. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+      "GET recent governance events from a running audit-stream-py instance (AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN), optionally filtered by kind or source. The service does not combine both filters. Returns the events array plus a count field; recorded source labels are caller-asserted. Returns a structured error when unconfigured.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -850,13 +852,8 @@ export const toolDescriptors = [
         limit: {
           type: "integer",
           minimum: 1,
-          description: "Cap the number of events returned. Defaults to the server's own cap.",
-        },
-        since_id: {
-          type: "integer",
-          minimum: 0,
-          description:
-            "Return only events with event_id > since_id. Use for incremental tailing without re-fetching the whole chain.",
+          maximum: 1000,
+          description: "Cap the number of events requested to at most 1000. Responses are separately capped at 1 MB.",
         },
       },
     },
@@ -864,7 +861,7 @@ export const toolDescriptors = [
   {
     name: "audit_chain_verify_live",
     description:
-      "Ask the configured audit-stream service to check its full server-side hash chain. This checks chain continuity, not whether events are truthful, authorized, complete, or legally compliant. Returns valid, checked, first_break_at, and reason. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+      "Ask the configured audit-stream service to check its full server-side hash chain. This checks chain continuity, not whether events are truthful, authorized, complete, or legally compliant. Returns valid, checked, first_break_at, and reason. Requires AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN; returns a structured error otherwise.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
