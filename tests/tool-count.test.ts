@@ -117,6 +117,11 @@ describe("tool-count drift guard", () => {
 });
 
 describe("release metadata drift guard", () => {
+  it("keeps the official Registry description within its 100-character limit", () => {
+    const manifest = JSON.parse(read("server.json")) as { description: string };
+    expect(manifest.description.length).toBeLessThanOrEqual(100);
+  });
+
   it("keeps package, lockfile, Registry manifest, and changelog on one version", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     const lock = JSON.parse(read("package-lock.json")) as {
