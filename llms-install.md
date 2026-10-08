@@ -26,9 +26,9 @@ That's the entire installation. Restart the client; 75 tools appear.
 
 ## Optional: live audit-stream tools
 
-These instructions describe the unreleased 0.10.0 source candidate. An unpinned
-`npx` command uses the currently published npm package until this candidate is
-released.
+An unpinned `npx` command uses the currently published npm package. Check
+`npm view mcp-kinetic-gain version` before relying on a particular source
+change, or pin a reviewed package version in the client configuration.
 
 To enable the live audit-stream tools (`audit_event_emit`,
 `audit_events_query`, `audit_chain_verify_live`), point the server at a running

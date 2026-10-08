@@ -108,10 +108,10 @@ The DefenseTech 72-hour clock uses the time an incident was **discovered**, not 
 
 ## Install
 
-This branch documents the unreleased 0.10.0 candidate. The commands below install
-the version currently published on npm until 0.10.0 is released. To run this
-candidate from the checkout, use `npm ci`, `npm run build`, then
-`node dist/server.js`.
+The commands below install the version currently published on npm. To run this
+source checkout instead, use `npm ci`, `npm run build`, then
+`node dist/server.js`. Check `npm view mcp-kinetic-gain version` before relying
+on a particular source change.
 
 ```bash
 npm install -g mcp-kinetic-gain

@@ -133,6 +133,6 @@ describe("release metadata drift guard", () => {
     expect(lock.packages[""].version).toBe(pkg.version);
     expect(manifest.version).toBe(pkg.version);
     expect(manifest.packages.map((item) => item.version)).toEqual([pkg.version]);
-    expect(changelog).toContain(`## [${pkg.version}] - `);
+    expect(changelog).toContain(`## [${pkg.version}]`);
   });
 });

@@ -2,9 +2,9 @@
 
 All notable changes to this project are documented here.
 
-## [0.10.0] - Unreleased candidate
+## [0.10.0]
 
-- Migration from 0.9.3: use a new `v0.10.0` tag only after this candidate is reviewed and merged. Replace `occurred_at` with `discovered_at` when calling `defensetech_check_dfars_72h_clock`; configure both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` for live audit tools; stop passing unsupported `since_id` to `audit_events_query` and use one filter at a time. No change to the offline audit tools.
+- Migration from 0.9.3: replace `occurred_at` with `discovered_at` when calling `defensetech_check_dfars_72h_clock`; configure both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` for live audit tools; stop passing unsupported `since_id` to `audit_events_query` and use one filter at a time. No change to the offline audit tools.
 - Require the audit-stream service's bearer token for all three live audit tools, refuse remote plaintext or URL-embedded credentials, and suppress untrusted error details. Remove the unsupported `since_id` query option and reject combined kind/source filters rather than returning incomplete results. Live audit use now requires both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN`; existing URL-only configurations fail closed.
 - Reject malformed supplied audit query filters and payloads before network access; validate every rubric row before inferring a Decision Card status so an unknown result cannot produce an approval preview. Require the expected HTTP status and response shape before reporting a live audit call as successful; mark these structured errors as MCP tool errors.
 - Separate release verification, OIDC npm publication, and GitHub Release writes into least-privilege jobs. Require the release tag to point to a commit on main and publish the checksummed tarball that passed verification.
