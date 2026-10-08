@@ -606,7 +606,7 @@ export const toolDescriptors = [
   {
     name: "decision_card_infer_status",
     description:
-      "Given a rubric, infer the right `decision.status`. Mirrors procurement-decision-api's rubric engine: any 'fail' -> 'rejected-with-remediation'; any 'partial' or 'pass-with-condition' -> 'approved-with-conditions'; all 'pass' -> 'approved'; empty or all 'n/a' -> 'pending'.",
+      "Validate each rubric row, then infer a preview decision.status. Mirrors procurement-decision-api's rubric engine: any 'fail' -> 'rejected-with-remediation'; any 'partial' or 'pass-with-condition' -> 'approved-with-conditions'; all 'pass' -> 'approved'; empty or all 'n/a' -> 'pending'. An unsupported result returns an error, never an approval.",
     inputSchema: {
       type: "object",
       required: ["rubric"],
@@ -619,7 +619,7 @@ export const toolDescriptors = [
             required: ["id", "result"],
             additionalProperties: true,
             properties: {
-              id: { type: "string" },
+              id: { type: "string", minLength: 1 },
               result: {
                 type: "string",
                 enum: ["pass", "pass-with-condition", "partial", "fail", "n/a"],
@@ -802,7 +802,7 @@ export const toolDescriptors = [
   {
     name: "audit_event_emit",
     description:
-      "Writes a governance event to the audit-stream-py instance configured by AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN. This sends kind, caller-asserted source, and payload to that service and persists them there. The bearer token authenticates this MCP process, not the claimed producer or tenant. Obtain the user's approval before recording an event; omit secrets and personal data unless the service is approved for them. The server assigns event_id/timestamp/prev_hash/hash. Returns the persisted event or a structured error when unconfigured.",
+      "POSTs a governance event to the audit-stream-py instance configured by AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN. This sends kind, caller-asserted source, and payload to that service. The bearer token authenticates this MCP process, not the claimed producer or tenant. Obtain the user's approval before recording an event; omit secrets and personal data unless the service is approved for them. The server assigns event_id/timestamp/prev_hash/hash. Returns a validated service event receipt or a structured error; receipt does not prove durable storage or event completeness.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -816,11 +816,14 @@ export const toolDescriptors = [
       properties: {
         kind: {
           type: "string",
+          maxLength: 128,
+          pattern: "^[a-z][a-z0-9_]*$",
           description:
             "The audit-stream-py service accepts only its declared event kinds (for example decision_card_drafted, request_denied, or watch_drifted). Use 'other' for ad-hoc kinds; unknown values are rejected by the sink.",
         },
         source: {
           type: "string",
+          minLength: 1,
           maxLength: 128,
           pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
           description:
@@ -828,7 +831,7 @@ export const toolDescriptors = [
         },
         payload: {
           type: "object",
-          description: "Free-form structured payload to record alongside kind+source.",
+          description: "Optional plain-object payload to record alongside kind+source. Invalid supplied payloads are rejected, not dropped.",
         },
       },
     },
@@ -843,10 +846,16 @@ export const toolDescriptors = [
       properties: {
         kind: {
           type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[a-z][a-z0-9_]*$",
           description: "Filter by event kind (exact match). Omit to get all kinds.",
         },
         source: {
           type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
           description: "Filter by source (exact match). Omit to get all sources.",
         },
         limit: {

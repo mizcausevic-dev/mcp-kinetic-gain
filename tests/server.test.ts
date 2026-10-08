@@ -1459,6 +1459,21 @@ describe("CLI validate command", () => {
 // ============================================================================
 
 describe("v0.6.0: decision_card_infer_status", () => {
+  it("rejects malformed rubric rows before an approval preview", async () => {
+    const malformed = [
+      [{ id: "good", result: "pass" }, { id: "bad", result: "error" }],
+      [{ id: "good", result: "pass" }, { id: "missing" }],
+      [{ id: "good", result: "pass" }, { id: "", result: "pass" }],
+      [{ id: "good", result: "pass" }, null],
+      [{ id: "good", result: "pass" }, { id: "bad", result: null }],
+    ];
+    for (const rubric of malformed) {
+      const out = JSON.parse(await handlers.decision_card_infer_status({ rubric }));
+      expect(out.error).toMatch(/rubric\[1\]/);
+      expect(out.status).toBeUndefined();
+    }
+  });
+
   it("returns 'approved' when every result is pass", async () => {
     const out = JSON.parse(
       await handlers.decision_card_infer_status({

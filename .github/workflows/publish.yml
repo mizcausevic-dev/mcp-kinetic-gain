@@ -1,32 +1,41 @@
 name: Publish to npm
 
-# Triggered on tag pushes matching v*. The convention is:
-#   1. Bump version in package.json + CHANGELOG.md
-#   2. git commit
-#   3. git tag vX.Y.Z
-#   4. git push && git push --tags
-# This workflow then runs the test suite, verifies the tag matches the
-# package.json version, and publishes to npm with provenance.
-
+# A tag is eligible only when its commit is already on main. Verification runs
+# without write permissions. OIDC publication and GitHub Release writes happen
+# in separate jobs after the exact tarball has been tested and checksummed.
 on:
   push:
     tags:
       - 'v*'
 
-# npm provenance requires id-token: write so the GitHub OIDC token can be
-# minted and submitted to Sigstore as the attestation subject.
-# contents: write is required to attach SBOM artifact to the GitHub Release.
-permissions: read-all
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
+      contents: read
     steps:
-      - name: Check out the tagged commit
+      - name: Check out the tagged commit without persisting credentials
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require this tag commit to be on main
+        run: |
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          tag_commit=$(git rev-parse "${GITHUB_REF}^{commit}")
+          test "$(git rev-parse HEAD)" = "$tag_commit"
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "::error::Tag commit is not on main. Merge the reviewed commit before tagging."
+            exit 1
+          fi
 
       - name: Set up Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
@@ -34,98 +43,130 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org/'
 
+      - name: Verify tag, package, and Registry manifest versions
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          EXPECTED="$tag_version" node -e 'const p=require("./package.json"),s=require("./server.json"),q=s.packages?.[0],v=process.env.EXPECTED; if(p.version!==v || s.version!==v || q?.version!==v || q?.identifier!==p.name || s.name!==p.mcpName) process.exit(1)'
+          echo "Tag v${tag_version} matches package and Registry manifest."
+
+      - name: Require an unused npm version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
+            "https://registry.npmjs.org/mcp-kinetic-gain/${version}?check=${GITHUB_RUN_ID}")
+          if [ "$status" != "404" ]; then
+            echo "::error::Expected unpublished version (HTTP 404); registry returned HTTP ${status}."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit dependencies
-        run: npm audit --audit-level=high
-
-      - name: Verify tag matches package.json version
+      - name: Audit dependencies and registry signatures
         run: |
-          tag_version="${GITHUB_REF#refs/tags/v}"
-          pkg_version=$(node -p "require('./package.json').version")
-          if [ "$tag_version" != "$pkg_version" ]; then
-            echo "::error::Tag v${tag_version} does not match package.json version ${pkg_version}."
-            echo "Bump package.json to ${tag_version} before tagging, or retag with v${pkg_version}."
-            exit 1
-          fi
-          echo "Tag v${tag_version} matches package.json. Proceeding."
+          npm audit --audit-level=high
+          npm audit signatures
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
+      - name: Typecheck, test, and build
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
 
       - name: Generate CycloneDX SBOM
         run: |
-          # Workspace dependency inventory for this release commit. Includes
-          # development dependencies; package contents are checked separately.
           mkdir -p sbom
           npm sbom --sbom-format cyclonedx --sbom-type library > sbom/cyclonedx.json
-          node -e "const s=require('./sbom/cyclonedx.json'); console.log('SBOM:', s.bomFormat, s.specVersion, '·', (s.components||[]).length, 'components');"
+          node -e 'const s=require("./sbom/cyclonedx.json"); if(s.bomFormat!=="CycloneDX" || !Array.isArray(s.components)) process.exit(1); console.log("SBOM components:",s.components.length)'
 
-      - name: Ensure npm supports the OIDC trusted-publishing handshake
-        # Node 20 bundles an npm CLI too old for the OIDC handshake that
-        # `--provenance` publishing now requires against the registry. When
-        # that handshake fails, the registry silently treats the request as
-        # anonymous, which cannot PUT -- and the resulting error is a
-        # misleading 404 ("'pkg@x.y.z' is not in this registry") rather than
-        # a clear auth failure, on a package that demonstrably already
-        # exists. Confirmed against this exact repo: the Sigstore provenance
-        # attestation step succeeded, then the actual publish PUT 404'd,
-        # twice, byte-for-byte identical on a rerun -- ruling out a
-        # transient registry blip. Fix is npm >=11.5.1.
-        # npm 12 requires Node
-        # >=22.22, which this job's Node 20 setup does not satisfy, so
-        # `npm@latest` fails its own EBADENGINE check before it can even
-        # install (confirmed: the first attempt at this fix used `latest`
-        # and failed exactly this way). npm 11.19.0 supports Node
-        # ^20.17.0 || >=22.9.0 and includes the OIDC fix. Pinning this
-        # tool avoids a new npm release changing publish behavior mid-run.
-        run: npm install -g npm@11.19.0 && npm --version
-
-      - name: Publish to npm with provenance
-        # No NPM_TOKEN. npm is deprecating 2FA-bypass tokens for direct
-        # publishing (the "npm tokens that bypass 2FA are being restricted"
-        # notice, confirmed on this exact repo 2026-09-12: the classic
-        # NODE_AUTH_TOKEN flow signed provenance fine, then 404'd on the
-        # actual PUT). id-token: write above is what this needs instead --
-        # npm's OIDC Trusted Publisher flow, no token, no OTP, ever. Requires
-        # this repo + this workflow filename registered as a Trusted
-        # Publisher on the npm package's Publishing access settings; if that
-        # registration is missing this step fails with the same E404.
-        run: npm publish --provenance --access public
-
-      - name: Verify the package is available on npm
+      - name: Pack and inventory the exact release tarball
         run: |
-          expected=$(node -p "require('./package.json').version")
+          mkdir -p release
+          npm pack --ignore-scripts --json --pack-destination release > pack.json
+          node -e 'const p=require("./package.json"),d=require("./pack.json"); if(d.length!==1 || d[0].name!==p.name || d[0].version!==p.version || d[0].files.some(f=>!f.path.startsWith("dist/") && !["README.md","LICENSE","package.json"].includes(f.path))) process.exit(1); console.log("Package files:",d[0].files.length)'
+          cp sbom/cyclonedx.json release/cyclonedx.json
+          (cd release && sha256sum ./*.tgz > package.sha256 && sha256sum cyclonedx.json > sbom.sha256)
+
+      - name: Upload verified release materials
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: release-materials
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Download verified release materials
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: release-materials
+          path: release/
+
+      - name: Check artifact integrity
+        run: |
+          (cd release && sha256sum --check --strict package.sha256 && sha256sum --check --strict sbom.sha256)
+          version="${GITHUB_REF_NAME#v}"
+          test -f "release/mcp-kinetic-gain-${version}.tgz"
+
+      - name: Install an OIDC-capable npm CLI
+        run: npm install -g --ignore-scripts npm@11.19.0 && npm --version
+
+      - name: Publish the tested tarball with provenance
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          npm publish "./release/mcp-kinetic-gain-${version}.tgz" --provenance --access public --ignore-scripts
+
+      - name: Verify the public npm package and provenance
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
           for attempt in {1..12}; do
-            # During v0.9.3, npm view kept returning 404 after publication
-            # while a fresh exact-version registry request succeeded. Fetch
-            # that public record with a fresh URL on each attempt.
             if curl -fsS --max-time 15 -H 'Cache-Control: no-cache' \
               "https://registry.npmjs.org/mcp-kinetic-gain/${expected}?check=${attempt}" \
               -o published-package.json && \
-              EXPECTED="$expected" node -e 'const d=require("./published-package.json"); process.exit(d.name==="mcp-kinetic-gain" && d.version===process.env.EXPECTED && Boolean(d.dist?.integrity) && Boolean(d.dist?.attestations?.provenance) ? 0 : 1)'; then
-              echo "npm published=mcp-kinetic-gain@${expected}"
+              EXPECTED="$expected" node -e 'const fs=require("fs"),crypto=require("crypto"),d=require("./published-package.json"),v=process.env.EXPECTED,b=fs.readFileSync(`release/mcp-kinetic-gain-${v}.tgz`),integrity="sha512-"+crypto.createHash("sha512").update(b).digest("base64"); process.exit(d.name==="mcp-kinetic-gain" && d.version===v && d.dist?.integrity===integrity && Boolean(d.dist?.attestations?.provenance) ? 0 : 1)'; then
+              echo "npm published=mcp-kinetic-gain@${expected} with matching tarball integrity and provenance"
               exit 0
             fi
             sleep 5
           done
-          echo "::error::npm did not report mcp-kinetic-gain@${expected} after publish"
+          echo "::error::npm did not report mcp-kinetic-gain@${expected} with provenance after publish"
           exit 1
+
+  release:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release materials
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: release-materials
+          path: release/
+
+      - name: Check SBOM integrity
+        run: (cd release && sha256sum --check --strict sbom.sha256)
 
       - name: Attach SBOM to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${GITHUB_REF_NAME}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" sbom/cyclonedx.json --clobber
+            gh release upload "$TAG" release/cyclonedx.json --clobber
           else
-            gh release create "$TAG" sbom/cyclonedx.json --title "$TAG" --notes "See CHANGELOG.md. Workspace dependency SBOM attached (CycloneDX 1.5)."
+            gh release create "$TAG" release/cyclonedx.json --title "$TAG" --notes "See CHANGELOG.md. Workspace dependency SBOM attached (CycloneDX)."
           fi

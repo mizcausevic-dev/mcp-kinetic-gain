@@ -118,13 +118,26 @@ export async function handleDecisionCardInspect(args: {
  *   empty / all n/a       -> "pending"
  */
 export async function handleDecisionCardInferStatus(args: {
-  rubric: Array<{ id: string; result: string }>;
+  rubric: unknown;
 }): Promise<string> {
   if (!Array.isArray(args.rubric)) {
     return pretty({ error: "`rubric` must be an array" });
   }
   if (args.rubric.length === 0) {
     return pretty({ status: "pending", reason: "empty rubric" });
+  }
+  const validResults = new Set(["pass", "pass-with-condition", "partial", "fail", "n/a"]);
+  for (const [index, row] of args.rubric.entries()) {
+    if (
+      typeof row !== "object" ||
+      row === null ||
+      Array.isArray(row) ||
+      typeof row.id !== "string" ||
+      row.id.length === 0 ||
+      !validResults.has(row.result)
+    ) {
+      return pretty({ error: `rubric[${index}] requires a non-empty id and a supported result` });
+    }
   }
   const results = args.rubric.map((r) => r.result);
   if (results.some((r) => r === "fail")) {

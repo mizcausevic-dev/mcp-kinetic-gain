@@ -301,6 +301,27 @@ export const handlers: Record<string, (args: any) => Promise<string>> = {
   defensetech_vault_contract_cross_binding_check: handleDefensetechVaultContractCrossBindingCheck,
 };
 
+// These handlers deliberately return structured errors for invalid inputs or
+// failed live calls. Mark those results as MCP errors so clients cannot treat
+// a failed audit write or an invalid status preview as a successful tool call.
+const structuredErrorTools = new Set([
+  "audit_event_emit",
+  "audit_events_query",
+  "audit_chain_verify_live",
+  "decision_card_infer_status",
+]);
+
+function isStructuredErrorResult(name: string, result: string): boolean {
+  if (!structuredErrorTools.has(name)) return false;
+  try {
+    const value: unknown = JSON.parse(result);
+    return typeof value === "object" && value !== null && !Array.isArray(value) &&
+      Object.prototype.hasOwnProperty.call(value, "error");
+  } catch {
+    return false;
+  }
+}
+
 export function buildServer(): Server {
   const server = new Server(
     { name: "mcp-kinetic-gain", version: PACKAGE_VERSION },
@@ -322,7 +343,10 @@ export function buildServer(): Server {
     }
     try {
       const result = await handler(args ?? {});
-      return { content: [{ type: "text", text: result }] };
+      const content = [{ type: "text" as const, text: result }];
+      return isStructuredErrorResult(name, result)
+        ? { content, isError: true }
+        : { content };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: message }], isError: true };

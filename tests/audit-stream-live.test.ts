@@ -72,7 +72,7 @@ describe("live audit-stream boundaries", () => {
       res.setHeader("content-type", "application/json");
       if (req.url === "/events" && req.method === "POST") {
         res.writeHead(201);
-        res.end(JSON.stringify({ event_id: 1 }));
+        res.end(JSON.stringify({ event_id: 1, hash: "a".repeat(64), kind: "other", source: "manual" }));
       } else if (req.url?.startsWith("/events")) {
         res.end("[]");
       } else {
@@ -113,11 +113,101 @@ describe("live audit-stream boundaries", () => {
     }
   });
 
+  it("does not claim success for malformed 2xx sink responses", async () => {
+    let status = 200;
+    let body = "";
+    const server = createServer((_req, res) => {
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(body);
+    });
+    const port = await listen(server);
+    const validReceipt = {
+      event_id: 1, hash: "a".repeat(64), kind: "other", source: "manual",
+    };
+    const cases: Array<{ route: "emit" | "query" | "verify"; code: number; data: string }> = [
+      { route: "emit", code: 200, data: JSON.stringify(validReceipt) },
+      { route: "emit", code: 201, data: "<html>leak-marker</html>" },
+      { route: "emit", code: 201, data: JSON.stringify({ event_id: 1, kind: "other", source: "manual" }) },
+      { route: "emit", code: 201, data: JSON.stringify({ ...validReceipt, source: "other-producer" }) },
+      { route: "query", code: 200, data: "<html>leak-marker</html>" },
+      { route: "query", code: 200, data: JSON.stringify({ events: [] }) },
+      { route: "query", code: 204, data: "" },
+      { route: "verify", code: 200, data: "<html>leak-marker</html>" },
+      { route: "verify", code: 200, data: JSON.stringify({ valid: "true", checked: 1 }) },
+      { route: "verify", code: 200, data: JSON.stringify({ valid: true, checked: "1" }) },
+    ];
+    try {
+      for (const item of cases) {
+        status = item.code;
+        body = item.data;
+        const out = await withAuditUrl(`http://127.0.0.1:${port}`, () => {
+          if (item.route === "emit") {
+            return handleAuditEventEmit({ kind: "other", source: "manual" });
+          }
+          if (item.route === "query") return handleAuditEventsQuery({});
+          return handleAuditChainVerifyLive({});
+        });
+        expect(JSON.parse(out).error).toBeTruthy();
+        expect(out).not.toContain("leak-marker");
+      }
+    } finally {
+      await close(server);
+    }
+  });
+
   it("refuses remote plaintext and URL-embedded credentials", async () => {
     for (const url of ["http://example.com:8093", "http://user:pass@127.0.0.1:8093"]) {
       const out = await withAuditUrl(url, () => handleAuditEventsQuery({}));
       expect(JSON.parse(out).error).toMatch(/AUDIT_STREAM_URL/);
       expect(out).not.toContain("pass");
+    }
+  });
+
+  it("rejects every malformed supplied query filter without reading any events", async () => {
+    let hits = 0;
+    const server = createServer((_req, res) => {
+      hits += 1;
+      res.end("[]");
+    });
+    const port = await listen(server);
+    const malformed = [
+      { kind: "" }, { kind: "   " }, { kind: null }, { kind: 1 }, { kind: undefined },
+      { source: "" }, { source: "   " }, { source: null }, { source: 1 },
+      { source: undefined }, { source: "bad source" }, { source: "x".repeat(129) },
+      { limit: 0 }, { limit: 1_001 }, { limit: null }, { limit: "5" }, { limit: undefined },
+    ];
+    try {
+      for (const filters of malformed) {
+        const out = await withAuditUrl(`http://127.0.0.1:${port}`, () =>
+          handleAuditEventsQuery(filters),
+        );
+        expect(JSON.parse(out).error).toBeTruthy();
+      }
+      expect(hits).toBe(0);
+    } finally {
+      await close(server);
+    }
+  });
+
+  it("rejects supplied invalid payloads without emitting an event", async () => {
+    let hits = 0;
+    const server = createServer((_req, res) => {
+      hits += 1;
+      res.end("{}");
+    });
+    const port = await listen(server);
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    try {
+      for (const payload of [undefined, null, [], "text", 7, new Date(), new Map(), cyclic]) {
+        const out = await withAuditUrl(`http://127.0.0.1:${port}`, () =>
+          handleAuditEventEmit({ kind: "other", source: "manual", payload }),
+        );
+        expect(JSON.parse(out).error).toMatch(/payload/);
+      }
+      expect(hits).toBe(0);
+    } finally {
+      await close(server);
     }
   });
 
