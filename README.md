@@ -70,7 +70,7 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `audit_event_inspect` - Pretty-print one GovernanceEvent with structural validation
 - `audit_event_emit` - Writes a governance event to the audit-stream-py instance
 - `audit_events_query` - GET recent governance events from a running audit-stream-py
-- `audit_chain_verify_live` - Ask a running audit-stream-py instance to walk its own chain
+- `audit_chain_verify_live` - Ask the configured audit-stream service to check its full
 - `suite_doc_detect_spec` - Detect which Kinetic Gain Suite spec a JSON document is by
 - `suite_doc_drift` - Structural diff between two versions of the same Suite
 - `defensetech_vault_resolve_3axis` - Deterministic preview of a DefenseTech 3-axis vault contract

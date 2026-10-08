@@ -169,11 +169,9 @@ export async function handleAuditEventsQuery(args: {
 }
 
 /**
- * Ask audit-stream-py to walk its own chain end-to-end and report
- * whether it's still intact. This is the canonical compliance answer
- * — much stronger than the local audit_chain_verify because it covers
- * the full server-side history, not just the events the agent has
- * pasted into context.
+ * Ask audit-stream-py to check its full server-side hash chain rather than
+ * only the events pasted into context. Chain continuity cannot prove that
+ * events are truthful, authorized, complete, or legally compliant.
  */
 export async function handleAuditChainVerifyLive(_args: Record<string, never>): Promise<string> {
   const url = baseUrl();

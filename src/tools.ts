@@ -864,7 +864,7 @@ export const toolDescriptors = [
   {
     name: "audit_chain_verify_live",
     description:
-      "Ask a running audit-stream-py instance to walk its own chain end-to-end and report whether it's still intact. This is the canonical compliance answer, covers the FULL server-side history, not just events the agent has in context. Returns the same shape as the local audit_chain_verify tool (valid, checked, first_break_at, reason) but for the live chain. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+      "Ask the configured audit-stream service to check its full server-side hash chain. This checks chain continuity, not whether events are truthful, authorized, complete, or legally compliant. Returns valid, checked, first_break_at, and reason. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
