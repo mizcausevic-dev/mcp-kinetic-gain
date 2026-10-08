@@ -1,8 +1,8 @@
 # mcp-kinetic-gain
 
-One **MCP server**, all twelve [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling + the DefenseTech 8-pack. Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **75 tools** (47 spec + 16 implementation-preview + 8 DefenseTech + 4 AI Claims Decision Card, v0.9.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card, AI Claims Decision Card - plus hash attestation (ed25519), audit-stream event composition + chain verification (offline AND live against a running audit-stream-py via `AUDIT_STREAM_URL`), cross-spec drift detection, Decision Intelligence preview, and the DefenseTech vault resolver + invariant checkers. **New in v0.9.0**: the AI Claims Decision Card (InsurTech, `claims_card_version`) - `claims_card_validate`, `claims_card_inspect`, `claims_card_sign`, `claims_card_chain`.
+One **MCP server**, all twelve [Kinetic Gain Protocol Suite](https://suite.kineticgain.com/) specs + the v0.1.0 implementation tooling + the DefenseTech 6-pack semantics (8 tools). Drop into Claude Desktop, Cursor, or any MCP-compatible client with a single config entry. The agent gains **75 tools** (47 spec + 16 implementation-preview + 8 DefenseTech + 4 AI Claims Decision Card, v0.9.0): AEO Protocol, Prompt Provenance, Agent Cards, AI Evidence Format, MCP Tool Cards, AI Tutor Cards, Student AI Disclosure, Classroom AI AUP, Clinical AI Disclosure, AI Incident Card, AI Procurement Decision Card, AI Claims Decision Card - plus hash attestation (ed25519), audit-stream event composition + chain verification (offline AND live against a running audit-stream-py via `AUDIT_STREAM_URL`), cross-spec drift detection, Decision Intelligence preview, and the DefenseTech vault resolver + invariant checkers. **New in v0.9.0**: the AI Claims Decision Card (InsurTech, `claims_card_version`) - `claims_card_validate`, `claims_card_inspect`, `claims_card_sign`, `claims_card_chain`.
 
-This is the agent-facing companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders the specs for humans, while this server exposes validation and workflow tools for agents. The optional `audit_event_emit` tool writes to a configured audit-stream service.
+This is the agent-facing companion to [kinetic-gain-visualizer](https://github.com/mizcausevic-dev/kinetic-gain-visualizer): the visualizer renders the specs for humans, while this server exposes validation and workflow tools for agents. The optional `audit_event_emit` tool sends an event to a configured audit-stream service.
 
 ## Tools
 
@@ -38,12 +38,12 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `disclosure_inspect` - Structured summary of a Student AI Disclosure: assignment
 - `disclosure_verify_artifact_hash` - Recompute SHA-256 over a candidate artifact and compare to
 - `disclosure_verify_prompt_hash` - Verify a single prompt hash in a hashed-mode disclosure
-- `disclosure_aup_check` - Surface the disclosure's policy posture: whether an aup_uri
+- `disclosure_aup_check` - Surface the disclosure's declared policy posture and any
 - `aup_well_known_url` - Compute the canonical Classroom AI AUP well-known URL
 - `aup_fetch` - Fetch a Classroom AI AUP from a URL
 - `aup_validate` - Validate a Classroom AI AUP JSON document against the v0.1
 - `aup_inspect` - Structured summary of a Classroom AI AUP: policy identity
-- `aup_check_compliance` - HEADLINE TOOL, joins an AUP with a Student AI Disclosure and
+- `aup_check_compliance` - Compare an AUP with a Student AI Disclosure on eight declared
 - `clinical_ai_well_known_url` - Compute the canonical Clinical AI Card well-known URL
 - `clinical_ai_fetch` - Fetch a Clinical AI Card from a URL
 - `clinical_ai_validate` - Validate a Clinical AI Card JSON document against the v0.1
@@ -57,8 +57,8 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `decision_card_fetch` - Fetch an AI Procurement Decision Card from a URL
 - `decision_card_validate` - Validate an AI Procurement Decision Card JSON document
 - `decision_card_inspect` - Structured summary of an AI Procurement Decision Card: buyer
-- `decision_card_infer_status` - Given a rubric, infer the right decision.status
-- `decision_card_to_policy_bundle` - Translate a Decision Card into the PolicyBundle that
+- `decision_card_infer_status` - Validate each rubric row, then infer a preview decision.status
+- `decision_card_to_policy_bundle` - Read-only deny preview for rejected, withdrawn, expired, or
 - `decision_card_signature_check` - Structural check on a Decision Card's signatures[] block
 - `incident_affected_walk` - Walk an Incident Card's affected block and return every
 - `incident_remediation_plan` - Map each affected URI in an Incident Card to a recommended
@@ -68,14 +68,14 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `audit_event_compose` - Build a ready-to-POST audit-stream-py GovernanceEvent
 - `audit_chain_verify` - Walk an array of GovernanceEvents top-to-bottom and verify
 - `audit_event_inspect` - Pretty-print one GovernanceEvent with structural validation
-- `audit_event_emit` - Writes a governance event to the audit-stream-py instance
+- `audit_event_emit` - POSTs a governance event to the audit-stream-py instance
 - `audit_events_query` - GET recent governance events from a running audit-stream-py
-- `audit_chain_verify_live` - Ask a running audit-stream-py instance to walk its own chain
+- `audit_chain_verify_live` - Ask the configured audit-stream service to check its full
 - `suite_doc_detect_spec` - Detect which Kinetic Gain Suite spec a JSON document is by
 - `suite_doc_drift` - Structural diff between two versions of the same Suite
-- `defensetech_vault_resolve_3axis` - Resolve a (CUI tier, export-control status, foreign-person
-- `defensetech_audit_event_check_invariants` - Run all 3 DefenseTech audit-stream invariants against a
-- `defensetech_check_dfars_72h_clock` - Check DFARS 252.204-7012(c)(1)(ii) 72-hour cyber-incident
+- `defensetech_vault_resolve_3axis` - Deterministic preview of a DefenseTech 3-axis vault contract
+- `defensetech_audit_event_check_invariants` - Run three deterministic DefenseTech event checks: CUI
+- `defensetech_check_dfars_72h_clock` - Calculate the DFARS 252.204-7012 discovery-to-filing 72-hour
 - `defensetech_check_cui_distribution_statement` - Check that a CUI-Specified+ tier event carries the required
 - `defensetech_check_itar_us_person` - Check that an ITAR resource event has US-PERSON-VERIFIED (or
 - `defensetech_incident_classify_event_type` - Given a freeform description of a defense-AI incident
@@ -93,9 +93,11 @@ Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fe
 
 ## Network and data boundaries
 
-URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. `AUDIT_STREAM_URL` optionally enables live event queries and `audit_event_emit`, which sends and persists `kind`, `source`, and `payload` at the configured service. Approve that write before calling it; avoid secrets and personal data unless the service is approved to store them. Use HTTPS for a remote audit-stream service.
+URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. The optional live audit tools require both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` in the MCP server's environment. The token must match the audit-stream service's bearer token and have at least 32 visible ASCII characters. Use HTTPS for a remote service; HTTP is accepted only for loopback development. Missing or invalid configuration returns an error without sending a request. `audit_event_emit` sends `kind`, caller-asserted `source`, and `payload` to the configured service and validates its event receipt. The receipt does not prove durable storage or event completeness. Its shared token authenticates this MCP process, not the source label or tenant. Approve the write before calling it; omit secrets and personal data unless the service is approved for them. Hash-chain verification checks continuity only; it does not prove audit completeness.
 
-Schema validation checks the document shape and selected rules. A passing result is not proof of FERPA, COPPA, HIPAA, FDA, EU AI Act, CMMC, or other legal compliance. `attestation_verify` checks a signature against the public key supplied by the caller; it does not establish the key owner's identity.
+Schema validation checks the document shape and selected rules. A passing result is not proof of FERPA, COPPA, HIPAA, FDA, EU AI Act, CMMC, export-control status, or other legal compliance. `attestation_verify` checks a signature against the public key supplied by the caller; it does not establish the key owner's identity. `aup_check_compliance` evaluates eight disclosed fields only; it does not check policy scope, tool/vendor requirements, parent consent, or Tutor Cards. A true `allowed` value is not an authorization grant. DefenseTech tools calculate from supplied data; they do not classify materials or verify a person's status or license. Positive Decision Cards require the live policy engine's identity, scope, action, expiry, and trusted-attestation checks before an enforceable bundle can be created.
+
+The DefenseTech 72-hour clock uses the time an incident was **discovered**, not when it occurred or when an audit event was created. Supply discovered_at and filed_at with time zones; see [DFARS 252.204-7012](https://www.acquisition.gov/dfars/252.204-7012-safeguarding-covered-defense-information-and-cyber-incident-reporting.). A report's actual submission and contract applicability require external evidence.
 
 ## Start with a task
 
@@ -105,6 +107,11 @@ Schema validation checks the document shape and selected rules. A passing result
 - **Record an event:** prepare the payload with `audit_event_compose`, review it for sensitive data, then call `audit_event_emit` only when the configured audit-stream service and write are approved.
 
 ## Install
+
+The commands below install the version currently published on npm. To run this
+source checkout instead, use `npm ci`, `npm run build`, then
+`node dist/server.js`. Check `npm view mcp-kinetic-gain version` before relying
+on a particular source change.
 
 ```bash
 npm install -g mcp-kinetic-gain

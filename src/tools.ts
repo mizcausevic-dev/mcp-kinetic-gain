@@ -372,7 +372,7 @@ export const toolDescriptors = [
   },
   {
     name: "disclosure_aup_check",
-    description: "Surface the disclosure's policy posture: whether an aup_uri is referenced and what the student declared. Status is one of: declared_compliant, declared_non_compliant, aup_referenced_but_unclaimed, no_aup_reference. Reports declared posture only; for the actual three-way join use aup_check_compliance.",
+    description: "Surface the disclosure's declared policy posture and any aup_uri reference. Status is one of: declared_compliant, declared_non_compliant, aup_referenced_but_unclaimed, no_aup_reference. This does not verify compliance; aup_check_compliance evaluates eight declared AUP/Disclosure checks only.",
     inputSchema: {
       type: "object",
       required: ["document_json"],
@@ -428,7 +428,7 @@ export const toolDescriptors = [
   },
   {
     name: "aup_check_compliance",
-    description: "HEADLINE TOOL, joins an AUP with a Student AI Disclosure and decides whether the submission complies with the operative policy. Eight gates: policy effective window, signature, artifact_hash, teacher acknowledgment, prompt evidence mode, permitted/prohibited roles, assistance-extent ceiling, and assistance_extent_max=none vs ai_used=true. Returns { allowed, policy_id, disclosure_id, violations[] } with one entry per failed gate. The three-document join (Tutor Card + AUP + Disclosure) reduces to a single allow/deny call.",
+    description: "Compare an AUP with a Student AI Disclosure on eight declared checks: policy effective window, signature, artifact_hash, teacher acknowledgment, prompt evidence mode, permitted/prohibited roles, assistance-extent ceiling, and assistance_extent_max=none vs ai_used=true. Returns { allowed, policy_id, disclosure_id, violations[] }; allowed=true means only these checks passed. It does not verify policy scope, tool/vendor requirements, parent consent, Tutor Cards, or legal compliance, and is not an enforcement decision.",
     inputSchema: {
       type: "object",
       required: ["disclosure_json"],
@@ -606,7 +606,7 @@ export const toolDescriptors = [
   {
     name: "decision_card_infer_status",
     description:
-      "Given a rubric, infer the right `decision.status`. Mirrors procurement-decision-api's rubric engine: any 'fail' -> 'rejected-with-remediation'; any 'partial' or 'pass-with-condition' -> 'approved-with-conditions'; all 'pass' -> 'approved'; empty or all 'n/a' -> 'pending'.",
+      "Validate each rubric row, then infer a preview decision.status. Mirrors procurement-decision-api's rubric engine: any 'fail' -> 'rejected-with-remediation'; any 'partial' or 'pass-with-condition' -> 'approved-with-conditions'; all 'pass' -> 'approved'; empty or all 'n/a' -> 'pending'. An unsupported result returns an error, never an approval.",
     inputSchema: {
       type: "object",
       required: ["rubric"],
@@ -619,7 +619,7 @@ export const toolDescriptors = [
             required: ["id", "result"],
             additionalProperties: true,
             properties: {
-              id: { type: "string" },
+              id: { type: "string", minLength: 1 },
               result: {
                 type: "string",
                 enum: ["pass", "pass-with-condition", "partial", "fail", "n/a"],
@@ -633,7 +633,7 @@ export const toolDescriptors = [
   {
     name: "decision_card_to_policy_bundle",
     description:
-      "Translate a Decision Card into the PolicyBundle that policy-as-code-engine's POST /bundles/from-decision-card would generate. Read-only preview. 'approved' -> allow-all; 'rejected*' / 'withdrawn' / 'expired' / 'pending' -> deny-all; 'approved-with-conditions' -> one policy per condition (deny-by-default, allow only when conditions_satisfied.{id} is true).",
+      "Read-only deny preview for rejected, withdrawn, expired, or pending Decision Cards; returned bundles carry preview_only=true and enforceable=false. Approved statuses return an MCP error: only the live policy engine can check buyer identity and trusted attestation, vendor scope, allowed action, and effective window before producing an enforceable bundle. Do not use this tool output as an access grant.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -802,7 +802,7 @@ export const toolDescriptors = [
   {
     name: "audit_event_emit",
     description:
-      "Writes a governance event to the audit-stream-py instance configured by AUDIT_STREAM_URL. This sends kind, source, and payload to that service and persists them there. Obtain the user's approval before recording an event; omit secrets and personal data unless the service is approved for them. The server assigns event_id/timestamp/prev_hash/hash. Returns the persisted event or a structured error when unconfigured.",
+      "POSTs a governance event to the audit-stream-py instance configured by AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN. This sends kind, caller-asserted source, and payload to that service. The bearer token authenticates this MCP process, not the claimed producer or tenant. Obtain the user's approval before recording an event; omit secrets and personal data unless the service is approved for them. The server assigns event_id/timestamp/prev_hash/hash. Returns a validated service event receipt or a structured error; receipt does not prove durable storage or event completeness.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -816,17 +816,22 @@ export const toolDescriptors = [
       properties: {
         kind: {
           type: "string",
+          maxLength: 128,
+          pattern: "^[a-z][a-z0-9_]*$",
           description:
-            "Event kind. Conventionally snake_case; matches the event kinds emitted by Kinetic Gain producers (decision_card_drafted, request_denied, breaker_opened, slo_burn_started, attestation_failed, watch_drifted, ...). Use 'other' for ad-hoc kinds not yet in the producer catalogue.",
+            "The audit-stream-py service accepts only its declared event kinds (for example decision_card_drafted, request_denied, or watch_drifted). Use 'other' for ad-hoc kinds; unknown values are rejected by the sink.",
         },
         source: {
           type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
           description:
-            "Who's emitting. Use a stable producer identifier (e.g. 'mcp-kinetic-gain', 'manual', or one of the suite producer names).",
+            "Caller-asserted ASCII producer label, not an authenticated identity. Use a stable identifier such as 'mcp-kinetic-gain' or 'manual'; do not claim another producer's identity without evidence.",
         },
         payload: {
           type: "object",
-          description: "Free-form structured payload to record alongside kind+source.",
+          description: "Optional plain-object payload to record alongside kind+source. Invalid supplied payloads are rejected, not dropped.",
         },
       },
     },
@@ -834,29 +839,30 @@ export const toolDescriptors = [
   {
     name: "audit_events_query",
     description:
-      "GET recent governance events from a running audit-stream-py instance (env var AUDIT_STREAM_URL), with optional server-side filters. Use to surface the last N denies, attestation failures, breaker trips, contract incompatibilities, or any other governance moment a user is investigating. Returns the events array plus a `count` field. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+      "GET recent governance events from a running audit-stream-py instance (AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN), optionally filtered by kind or source. The service does not combine both filters. Returns the events array plus a count field; recorded source labels are caller-asserted. Returns a structured error when unconfigured.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         kind: {
           type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[a-z][a-z0-9_]*$",
           description: "Filter by event kind (exact match). Omit to get all kinds.",
         },
         source: {
           type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
           description: "Filter by source (exact match). Omit to get all sources.",
         },
         limit: {
           type: "integer",
           minimum: 1,
-          description: "Cap the number of events returned. Defaults to the server's own cap.",
-        },
-        since_id: {
-          type: "integer",
-          minimum: 0,
-          description:
-            "Return only events with event_id > since_id. Use for incremental tailing without re-fetching the whole chain.",
+          maximum: 1000,
+          description: "Cap the number of events requested to at most 1000. Responses are separately capped at 1 MB.",
         },
       },
     },
@@ -864,7 +870,7 @@ export const toolDescriptors = [
   {
     name: "audit_chain_verify_live",
     description:
-      "Ask a running audit-stream-py instance to walk its own chain end-to-end and report whether it's still intact. This is the canonical compliance answer, covers the FULL server-side history, not just events the agent has in context. Returns the same shape as the local audit_chain_verify tool (valid, checked, first_break_at, reason) but for the live chain. Requires AUDIT_STREAM_URL; returns a structured error otherwise.",
+      "Ask the configured audit-stream service to check its full server-side hash chain. This checks chain continuity, not whether events are truthful, authorized, complete, or legally compliant. Returns valid, checked, first_break_at, and reason. Requires AUDIT_STREAM_URL and AUDIT_STREAM_TOKEN; returns a structured error otherwise.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -909,7 +915,7 @@ export const toolDescriptors = [
   {
     name: "defensetech_vault_resolve_3axis",
     description:
-      "Resolve a (CUI tier, export-control status, foreign-person restriction) tuple against a DefenseTech 3-axis vault contract. Returns the most-restrictive resolved policy: intersected allowed_actions, max minimum_human_user_status, OR-ed requires_* flags. The DefenseTech runtime-policy operator.",
+      "Deterministic preview of a DefenseTech 3-axis vault contract: intersect allowed_actions and OR requires_* flags. Unknown or incomparable human-user requirements return ok=false for an authorized policy owner to resolve. This does not verify identity, classification, licenses, or enforce access.",
     inputSchema: {
       type: "object",
       required: ["contract", "tuple"],
@@ -932,7 +938,7 @@ export const toolDescriptors = [
   {
     name: "defensetech_audit_event_check_invariants",
     description:
-      "Run all 3 DefenseTech audit-stream invariants against a single event: (#1) CUI distribution-statement on CUI-Specified+ per DoDI 5230.24, (#2) ITAR us-person verification per 22 CFR 120.62, (#3) DFARS 252.204-7012(c)(1)(ii) 72-hour cyber incident reporting wall-clock. Returns ok + errors + passed.",
+      "Run three deterministic DefenseTech event checks: CUI distribution-statement presence, ITAR status with tokenized license for an authorized foreign person, and a 72-hour discovery-to-filing interval. The last check requires event.discovered_at; event.timestamp is not a substitute. Returns ok + errors + passed, not a legal compliance determination.",
     inputSchema: {
       type: "object",
       required: ["event"],
@@ -943,13 +949,13 @@ export const toolDescriptors = [
   {
     name: "defensetech_check_dfars_72h_clock",
     description:
-      "Check DFARS 252.204-7012(c)(1)(ii) 72-hour cyber-incident reporting clock specifically. Returns elapsed_hours, within_window, overrun_hours.",
+      "Calculate the DFARS 252.204-7012 discovery-to-filing 72-hour interval from supplied timezone-qualified timestamps. Requires discovered_at, not occurred_at. Invalid or pre-discovery filing timestamps return valid=false and within_window=false. This arithmetic preview does not establish a reporting duty or prove filing.",
     inputSchema: {
       type: "object",
-      required: ["occurred_at", "filed_at"],
+      required: ["discovered_at", "filed_at"],
       additionalProperties: false,
       properties: {
-        occurred_at: { type: "string", format: "date-time" },
+        discovered_at: { type: "string", format: "date-time", description: "When the cyber incident was discovered; the reporting clock starts here." },
         filed_at: { type: "string", format: "date-time" },
       },
     },

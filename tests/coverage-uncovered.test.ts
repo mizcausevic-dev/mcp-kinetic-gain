@@ -4,7 +4,7 @@
  * A cross-reference of tools/list against tests/server.test.ts found 16 tool
  * names that never appeared in a test: the 8 DefenseTech tools, the 3 live
  * audit-stream tools, and the 5 card-fetch tools. This file adds tests for
- * each WITHOUT modifying any existing test or any src/ file.
+ * each; later regressions also exercise fail-closed DefenseTech behavior.
  *
  *   - DefenseTech (pure/deterministic): happy path + one error/edge path each.
  *   - Live audit-stream (network): the deterministic no-AUDIT_STREAM_URL error
@@ -38,14 +38,14 @@ describe("coverage: defensetech_vault_resolve_3axis", () => {
     },
   };
 
-  it("resolves the most-restrictive policy across the three axes", async () => {
+  it("intersects allowed actions when human-user requirements are compatible", async () => {
     const out = await call("defensetech_vault_resolve_3axis", {
       contract,
       tuple: { cui: "CUI-BASIC", export_control: "EAR", foreign_person: "US-PERSON" },
     });
     expect(out.ok).toBe(true);
     expect(out.resolved_allowed_actions).toEqual(["read"]); // intersection of the three sets
-    expect(out.resolved_minimum_human_user_status).toBe("us-person-verified"); // highest rank
+    expect(out.resolved_minimum_human_user_status).toBe("us-person-verified");
     expect(out.requires_audit).toBe(true); // OR-ed requires_* flags
   });
 
@@ -56,6 +56,19 @@ describe("coverage: defensetech_vault_resolve_3axis", () => {
     });
     expect(out.ok).toBe(false);
     expect(out.reason).toMatch(/axis_policies/);
+  });
+
+  it("fails closed on unknown or incomparable human-user requirements", async () => {
+    const unknown = structuredClone(contract);
+    unknown.axis_policies.cui_handling_policy["CUI-BASIC"].minimum_human_user_status = "unverified";
+    const args = { tuple: { cui: "CUI-BASIC", export_control: "EAR", foreign_person: "US-PERSON" } };
+    expect((await call("defensetech_vault_resolve_3axis", { contract: unknown, ...args })).ok).toBe(false);
+
+    const conflicting = structuredClone(contract);
+    conflicting.axis_policies.export_control_handling_policy.EAR.minimum_human_user_status = "secret-clearance";
+    const out = await call("defensetech_vault_resolve_3axis", { contract: conflicting, ...args });
+    expect(out.ok).toBe(false);
+    expect(out.reason).toMatch(/incomparable/);
   });
 });
 
@@ -73,12 +86,47 @@ describe("coverage: defensetech_audit_event_check_invariants", () => {
     expect(out.ok).toBe(false);
     expect(out.errors.some((e: string) => e.includes("#1"))).toBe(true);
   });
+
+  it("does not accept invalid or pre-discovery DFARS filing timestamps", async () => {
+    for (const [discovered_at, filed_at] of [
+      ["bad", "bad"],
+      ["2026-05-02T00:00:00Z", "2026-05-01T00:00:00Z"],
+    ]) {
+      const out = await call("defensetech_audit_event_check_invariants", {
+        event: { kind: "defensetech.dfars.cyber-incident-flagged", discovered_at,
+          dfars_cyber_incident_report_ref: { filed_at } },
+      });
+      expect(out.ok).toBe(false);
+      expect(out.errors.some((e: string) => e.includes("#3"))).toBe(true);
+    }
+  });
+
+  it("does not treat the event creation or occurrence time as discovery", async () => {
+    const out = await call("defensetech_audit_event_check_invariants", {
+      event: { kind: "defensetech.dfars.cyber-incident-flagged", timestamp: "2026-05-01T00:00:00Z",
+        occurred_at: "2026-05-01T00:00:00Z",
+        dfars_cyber_incident_report_ref: { filed_at: "2026-05-02T00:00:00Z" } },
+    });
+    expect(out.ok).toBe(false);
+    expect(out.errors.some((e: string) => e.includes("discovered_at"))).toBe(true);
+  });
+
+  it("requires a tokenized DDTC license for a foreign-person ITAR claim", async () => {
+    const event = { resource: { export_control_status: "ITAR" },
+      agent: { human_user_us_person_status: "AUTHORIZED-FOREIGN-PERSON-WITH-LICENSE" } };
+    const missing = await call("defensetech_audit_event_check_invariants", { event });
+    expect(missing.ok).toBe(false);
+    const licensed = await call("defensetech_audit_event_check_invariants", {
+      event: { ...event, agent: { ...event.agent, ddtc_export_license_number_tokenized: "test-license-token" } },
+    });
+    expect(licensed.ok).toBe(true);
+  });
 });
 
 describe("coverage: defensetech_check_dfars_72h_clock", () => {
-  it("is within the window when filed under 72h after the incident", async () => {
+  it("is within the window when filed under 72h after discovery", async () => {
     const out = await call("defensetech_check_dfars_72h_clock", {
-      occurred_at: "2026-05-01T00:00:00Z",
+      discovered_at: "2026-05-01T00:00:00Z",
       filed_at: "2026-05-02T00:00:00Z", // 24h
     });
     expect(out.within_window).toBe(true);
@@ -87,11 +135,40 @@ describe("coverage: defensetech_check_dfars_72h_clock", () => {
 
   it("reports overrun when filed past 72h", async () => {
     const out = await call("defensetech_check_dfars_72h_clock", {
-      occurred_at: "2026-05-01T00:00:00Z",
+      discovered_at: "2026-05-01T00:00:00Z",
       filed_at: "2026-05-05T04:00:00Z", // 100h
     });
     expect(out.within_window).toBe(false);
     expect(out.overrun_hours).toBeGreaterThan(0);
+  });
+
+  it("rejects malformed dates and reports filed-before-discovery as outside the window", async () => {
+    for (const input of [
+      { discovered_at: "not-a-date", filed_at: "2026-05-01T00:00:00Z" },
+      { discovered_at: "2026-02-30T00:00:00Z", filed_at: "2026-03-01T00:00:00Z" },
+      { discovered_at: "2026-05-02T00:00:00Z", filed_at: "2026-05-01T00:00:00Z" },
+    ]) {
+      const out = await call("defensetech_check_dfars_72h_clock", input);
+      expect(out.valid).toBe(false);
+      expect(out.within_window).toBe(false);
+    }
+  });
+
+  it("requires discovery explicitly and uses it even when occurrence was earlier", async () => {
+    const legacy = await call("defensetech_check_dfars_72h_clock", {
+      occurred_at: "2026-05-01T00:00:00Z", filed_at: "2026-05-05T00:00:00Z",
+    });
+    expect(legacy.valid).toBe(false);
+    expect(legacy.reason).toMatch(/discovered_at_required/);
+
+    const current = await call("defensetech_check_dfars_72h_clock", {
+      occurred_at: "2026-05-01T00:00:00Z", discovered_at: "2026-05-04T00:00:00Z",
+      filed_at: "2026-05-05T00:00:00Z",
+    });
+    expect(current.valid).toBe(true);
+    expect(current.within_window).toBe(true);
+    expect(current.elapsed_hours).toBe(24);
+    expect(current.interval_from).toBe("discovery");
   });
 });
 
@@ -188,6 +265,18 @@ describe("coverage: defensetech_vault_contract_cross_binding_check", () => {
     });
     expect(out.ok).toBe(false);
     expect(out.errors.length).toBe(1);
+  });
+
+  it("rejects HTTP, empty-host, and credential-bearing cross-binding URLs", async () => {
+    const out = await call("defensetech_vault_contract_cross_binding_check", {
+      contract: { cross_binding_refs: {
+        insecure: "http://x.example/card", emptyHost: "https://",
+        credentials: "https://user:pass@x.example/card",
+      } },
+    });
+    expect(out.ok).toBe(false);
+    expect(out.errors).toHaveLength(3);
+    expect(out.valid_refs).toEqual([]);
   });
 });
 

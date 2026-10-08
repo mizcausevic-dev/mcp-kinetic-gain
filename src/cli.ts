@@ -7,14 +7,14 @@
  * zod schema validates it.
  *
  * Subcommands:
- *   validate <paths...>   Validate JSON file(s) or glob(s) against the 10 specs.
+ *   validate <paths...>   Validate JSON file(s) or glob(s) against the 12 specs.
  *   --help, -h            Print usage.
  *   --version, -v         Print the package version.
  *
  * With no subcommand, falls through to MCP stdio server mode.
  */
 import { readFile } from "node:fs/promises";
-import fg from "fast-glob";
+import { glob } from "tinyglobby";
 import type { ZodTypeAny } from "zod";
 
 import {
@@ -144,18 +144,17 @@ async function validateFile(filePath: string): Promise<ValidationResult> {
 }
 
 async function expandPatterns(patterns: string[]): Promise<string[]> {
-  // fast-glob handles both literal paths and glob patterns. It requires forward
-  // slashes; on Windows, callers commonly pass paths with backslashes (from
-  // `path.join` or shell expansion), which fast-glob would interpret as glob
-  // escape characters. Normalize defensively.
+  // tinyglobby handles literal paths and patterns. Normalize Windows path
+  // separators before matching so they are not interpreted as glob escapes.
   const seen = new Set<string>();
   const out: string[] = [];
   for (const pat of patterns) {
     const normalized = pat.split("\\").join("/");
-    const matches = await fg(normalized, {
+    const matches = await glob(normalized, {
       onlyFiles: true,
       dot: true,
       followSymbolicLinks: false,
+      expandDirectories: false,
     });
     for (const m of matches) {
       if (!seen.has(m)) {

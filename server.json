@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.mizcausevic-dev/mcp-kinetic-gain",
-  "description": "Unified MCP server for the 12-spec Kinetic Gain Suite + DefenseTech 6-pack — 75 governance tools.",
-  "version": "0.9.3",
+  "description": "Unified MCP server for the 12-spec Kinetic Gain Suite + DefenseTech 6-pack semantics (8 tools) — 75 governance tools.",
+  "version": "0.10.0",
   "repository": {
     "url": "https://github.com/mizcausevic-dev/mcp-kinetic-gain",
     "source": "github"
@@ -11,16 +11,23 @@
     {
       "registryType": "npm",
       "identifier": "mcp-kinetic-gain",
-      "version": "0.9.3",
+      "version": "0.10.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "AUDIT_STREAM_URL",
-          "description": "Optional URL of a running audit-stream-py instance to enable the live audit-stream tools (audit_event_emit, audit_events_query, audit_chain_verify_live).",
+          "description": "Optional HTTPS URL (or loopback HTTP URL) of an audit-stream-py instance. Live tools also require AUDIT_STREAM_TOKEN.",
           "isRequired": false,
           "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "AUDIT_STREAM_TOKEN",
+          "description": "Bearer token for optional live audit-stream tools; at least 32 visible ASCII characters. Configure through a local secret source.",
+          "isRequired": false,
+          "isSecret": true,
           "format": "string"
         }
       ]

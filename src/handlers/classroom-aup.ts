@@ -30,8 +30,8 @@ const EXTENT_RANK: Record<string, number> = {
 
 /**
  * The headline check: join an AUP with a Student AI Disclosure and decide
- * whether the submission complies with the operative policy. Eight gates,
- * all reasons returned so a teacher / LMS can show the full violation set.
+ * whether eight declared fields satisfy the supplied policy. This does not
+ * evaluate the full policy or grant authorization. Failed gates are returned.
  */
 function checkCompliance(
   aup: ClassroomAup,

@@ -118,13 +118,26 @@ export async function handleDecisionCardInspect(args: {
  *   empty / all n/a       -> "pending"
  */
 export async function handleDecisionCardInferStatus(args: {
-  rubric: Array<{ id: string; result: string }>;
+  rubric: unknown;
 }): Promise<string> {
   if (!Array.isArray(args.rubric)) {
     return pretty({ error: "`rubric` must be an array" });
   }
   if (args.rubric.length === 0) {
     return pretty({ status: "pending", reason: "empty rubric" });
+  }
+  const validResults = new Set(["pass", "pass-with-condition", "partial", "fail", "n/a"]);
+  for (const [index, row] of args.rubric.entries()) {
+    if (
+      typeof row !== "object" ||
+      row === null ||
+      Array.isArray(row) ||
+      typeof row.id !== "string" ||
+      row.id.length === 0 ||
+      !validResults.has(row.result)
+    ) {
+      return pretty({ error: `rubric[${index}] requires a non-empty id and a supported result` });
+    }
   }
   const results = args.rubric.map((r) => r.result);
   if (results.some((r) => r === "fail")) {
@@ -142,11 +155,8 @@ export async function handleDecisionCardInferStatus(args: {
   return pretty({ status: "pending", reason: "all results are n/a" });
 }
 
-/**
- * Translate a Decision Card into the PolicyBundle that
- * `policy-as-code-engine`'s POST /bundles/from-decision-card would
- * generate. Read-only preview.
- */
+/** Read-only deny preview. Positive decisions require the live policy engine's
+ * identity, scope, expiry, and trusted-buyer-attestation checks. */
 export async function handleDecisionCardToPolicyBundle(args: {
   document_json?: string;
   url?: string;
@@ -167,6 +177,8 @@ export async function handleDecisionCardToPolicyBundle(args: {
 
   if (rejectStatuses.has(status)) {
     return pretty({
+      preview_only: true,
+      enforceable: false,
       bundle_id: `decision-card-${decision_id}`,
       source,
       policies: [
@@ -180,60 +192,20 @@ export async function handleDecisionCardToPolicyBundle(args: {
     });
   }
 
-  if (status === "approved") {
-    return pretty({
-      bundle_id: `decision-card-${decision_id}`,
-      source,
-      policies: [
-        {
-          id: `${decision_id}__approved`,
-          description: `Vendor "${vendor}" is approved; all requests permitted.`,
-          default_effect: "allow",
-          rules: [{ id: "approved-allow", effect: "allow", when_kind: "always" }],
-        },
-      ],
-    });
-  }
-
-  if (status === "approved-with-conditions") {
-    const conditions = card.conditions ?? [];
-    if (conditions.length === 0) {
-      // Fail safe — deny everything.
-      return pretty({
-        bundle_id: `decision-card-${decision_id}`,
-        source,
-        policies: [
-          {
-            id: `${decision_id}__approved-with-conditions-no-conditions`,
-            description: `Vendor "${vendor}" approved-with-conditions but no conditions declared; failing safe.`,
-            default_effect: "deny",
-            rules: [{ id: "no-conditions-deny", effect: "deny", when_kind: "always" }],
-          },
-        ],
-      });
-    }
-    return pretty({
-      bundle_id: `decision-card-${decision_id}`,
-      source,
-      policies: conditions.map((c) => ({
-        id: `${decision_id}__condition__${c.id}`,
-        description: c.description,
-        default_effect: "deny",
-        rules: [
-          {
-            id: `${c.id}-satisfied`,
-            effect: "allow",
-            when_kind: "eq",
-            when_field: `conditions_satisfied.${c.id}`,
-            when_value: true,
-          },
-        ],
-      })),
-    });
+  if (status === "approved" || status === "approved-with-conditions") {
+    throw new Error(pretty({
+      error: "positive_decision_requires_live_policy_engine",
+      decision_id,
+      status,
+      authorization_granted: false,
+      detail: "A card status alone cannot authorize use. The live policy engine must verify the buyer identity and trusted attestation, vendor scope, allowed action, and effective window before producing an enforceable bundle.",
+    }));
   }
 
   // Unknown status -> deny-all.
   return pretty({
+    preview_only: true,
+    enforceable: false,
     bundle_id: `decision-card-${decision_id}`,
     source,
     policies: [
