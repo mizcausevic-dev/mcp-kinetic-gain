@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Fail closed when a positive Decision Card is passed to the local policy-bundle preview. Access grants require the live policy engine's trusted buyer attestation, scoped vendor and action, and effective-window checks.
+- Reject unknown or incomparable DefenseTech human-user requirements, invalid discovery and filing timestamps, pre-discovery filings, ITAR foreign-person claims without a tokenized license, and non-HTTPS cross-binding references.
+- **Breaking input change:** `defensetech_check_dfars_72h_clock` now requires `discovered_at` instead of `occurred_at`. The event invariant requires `event.discovered_at`; an event's `timestamp` does not establish discovery. DFARS 252.204-7012 defines the 72-hour period from discovery: https://www.acquisition.gov/dfars/252.204-7012-safeguarding-covered-defense-information-and-cyber-incident-reporting.
+- Replace advisory-affected `fast-glob` with `tinyglobby` for CLI globs and update the MCP SDK and transitive packages. Refresh public tool descriptions to distinguish deterministic checks from legal or access decisions.
+
 ## [0.9.3] - 2026-09-29
 
 Published to npm and the official MCP Registry. The GitHub Release includes a

@@ -1438,6 +1438,13 @@ describe("CLI validate command", () => {
     expect(code).toBe(1);
   });
 
+  it("expands a matching glob and validates every matched JSON document", async () => {
+    const passingCode = await runValidate([join(workDir, "valid-*.json")]);
+    expect(passingCode).toBe(0);
+    const code = await runValidate([join(workDir, "*-aeo.json")]);
+    expect(code).toBe(1);
+  });
+
   it("aggregates: one failing file in a mixed batch makes the run fail", async () => {
     const code = await runValidate([
       join(workDir, "valid-aeo.json"),
@@ -1518,14 +1525,10 @@ const VALID_DECISION_CARD = {
 };
 
 describe("v0.6.0: decision_card_to_policy_bundle", () => {
-  it("approved card -> single allow-all policy", async () => {
-    const out = JSON.parse(
-      await handlers.decision_card_to_policy_bundle({
+  it("does not grant access from an approved card without live policy checks", async () => {
+    await expect(handlers.decision_card_to_policy_bundle({
         document_json: JSON.stringify(VALID_DECISION_CARD),
-      }),
-    );
-    expect(out.policies).toHaveLength(1);
-    expect(out.policies[0].default_effect).toBe("allow");
+      })).rejects.toThrow(/positive_decision_requires_live_policy_engine/);
   });
 
   it("rejected card -> single deny-all policy", async () => {
@@ -1533,10 +1536,12 @@ describe("v0.6.0: decision_card_to_policy_bundle", () => {
     const out = JSON.parse(
       await handlers.decision_card_to_policy_bundle({ document_json: JSON.stringify(card) }),
     );
+    expect(out.preview_only).toBe(true);
+    expect(out.enforceable).toBe(false);
     expect(out.policies[0].default_effect).toBe("deny");
   });
 
-  it("approved-with-conditions emits one policy per condition", async () => {
+  it("does not grant access from an approved-with-conditions card", async () => {
     const card = {
       ...VALID_DECISION_CARD,
       decision: { status: "approved-with-conditions" },
@@ -1545,12 +1550,8 @@ describe("v0.6.0: decision_card_to_policy_bundle", () => {
         { id: "bias-audit", description: "Bias audit refreshed" },
       ],
     };
-    const out = JSON.parse(
-      await handlers.decision_card_to_policy_bundle({ document_json: JSON.stringify(card) }),
-    );
-    expect(out.policies).toHaveLength(2);
-    expect(out.policies[0].default_effect).toBe("deny");
-    expect(out.policies[0].rules[0].when_field).toBe("conditions_satisfied.dpa-signed");
+    await expect(handlers.decision_card_to_policy_bundle({ document_json: JSON.stringify(card) }))
+      .rejects.toThrow(/positive_decision_requires_live_policy_engine/);
   });
 });
 

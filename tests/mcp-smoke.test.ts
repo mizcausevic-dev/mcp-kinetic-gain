@@ -34,6 +34,23 @@ describe("MCP protocol smoke", () => {
       expect(first?.type).toBe("text");
       if (first?.type !== "text") throw new Error("expected text tool response");
       expect(JSON.parse(first.text).valid).toBe(false);
+
+      const refused = await client.callTool({
+        name: "decision_card_to_policy_bundle",
+        arguments: { document_json: JSON.stringify({
+          decision_card_version: "0.1", decision_id: "test-approved", issued_at: "2026-05-15T00:00:00Z",
+          buyer: { name: "Test District", type: "school-district" },
+          decision: { status: "approved" }, subject: { vendor_name: "Test Vendor" },
+          rationale: "Synthetic fixture only",
+        }) },
+      });
+      expect(refused.isError).toBe(true);
+      const refusalText = refused.content[0];
+      expect(refusalText?.type).toBe("text");
+      if (refusalText?.type !== "text") throw new Error("expected text error response");
+      const refusal = JSON.parse(refusalText.text);
+      expect(refusal.error).toBe("positive_decision_requires_live_policy_engine");
+      expect(refusal.authorization_granted).toBe(false);
     } finally {
       await client.close();
       await server.close();
