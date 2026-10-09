@@ -3,7 +3,7 @@
  * or Broker policy decision. Only the explicitly selected pure tool can run.
  */
 import { createPublicKey, randomUUID, verify, type KeyObject } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { open, readFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
@@ -133,10 +133,25 @@ function principalFromAuth(auth: AuthInfo | undefined, config: SecureGateConfig)
 }
 
 async function readGatePolicy(path: string): Promise<GatePolicy> {
-  const info = await stat(path);
-  if (!info.isFile() || info.size > MAX_POLICY_BYTES) throw new Error("invalid gate policy file");
-  const raw = await readFile(path);
-  if (raw.length > MAX_POLICY_BYTES) throw new Error("invalid gate policy file");
+  // Keep the same open file descriptor through validation and the bounded
+  // read. Checking a path with stat() then opening it would race an atomic
+  // replacement of the policy file.
+  const handle = await open(path, "r");
+  let raw: Buffer;
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error("invalid gate policy file");
+    const bytes = Buffer.alloc(MAX_POLICY_BYTES + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      const { bytesRead } = await handle.read(bytes, length, bytes.length - length, length);
+      if (bytesRead === 0) break;
+      length += bytesRead;
+    }
+    if (length > MAX_POLICY_BYTES) throw new Error("invalid gate policy file");
+    raw = bytes.subarray(0, length);
+  } finally {
+    await handle.close();
+  }
   const value: unknown = JSON.parse(raw.toString("utf8"));
   const now = Math.floor(Date.now() / 1000);
   if (!record(value) || !hasOnlyKeys(value, ["version", "valid_until", "clients", "revoked_jtis"]) ||

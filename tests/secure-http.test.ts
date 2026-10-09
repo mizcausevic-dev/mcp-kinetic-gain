@@ -400,6 +400,10 @@ describe("loopback Streamable HTTP source pilot", () => {
       expect((await client.listTools()).tools).toEqual([]);
       const missingFile = await client.callTool({ name: TOOL, arguments: { body: {} } });
       expect(missingFile.isError).toBe(true);
+      await writeFile(policyFile, "x".repeat(32_769));
+      expect((await client.listTools()).tools).toEqual([]);
+      const oversizedFile = await client.callTool({ name: TOOL, arguments: { body: {} } });
+      expect(oversizedFile.isError).toBe(true);
     } finally {
       await client.close();
     }
