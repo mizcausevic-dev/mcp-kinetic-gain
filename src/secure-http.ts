@@ -22,6 +22,8 @@ export interface SecurePilotOptions {
   policyFile: string;
   auditUrl: string;
   auditToken: string;
+  pythonFile: string;
+  configFile: string;
 }
 
 export interface RunningSecurePilot {
@@ -152,6 +154,8 @@ if (isEntryPoint) {
     policyFile: process.env.MCP_SECURE_POLICY_FILE ?? "",
     auditUrl: process.env.AUDIT_STREAM_URL ?? "",
     auditToken: process.env.AUDIT_STREAM_TOKEN ?? "",
+    pythonFile: process.env.MCP_BROKER_PYTHON ?? "",
+    configFile: process.env.MCP_BROKER_CONFIG_FILE ?? "",
   };
   startSecurePilot(options).then(({ url }) => {
     process.stderr.write(`mcp-kinetic-gain source pilot listening on ${url}\n`);

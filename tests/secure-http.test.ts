@@ -1,28 +1,40 @@
 import { generateKeyPairSync, sign } from "node:crypto";
+import { execFile } from "node:child_process";
 import { createServer, request as httpRequest, type Server } from "node:http";
-import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { startSecurePilot, type RunningSecurePilot } from "../src/secure-http.js";
 import { SecurePilotGate, loadSecureGateConfig, verifyBearerToken } from "../src/secure-gate.js";
+import { checkBrokerDecision } from "../src/broker-bridge.js";
 
 const SINK_TOKEN = "S".repeat(40);
 const ISSUER = "synthetic-issuer";
-const CLIENT = "client-a";
-const SUBJECT = "subject-a";
+const CLIENT = "synthetic-client-a";
+const SUBJECT = "synthetic-subject-a";
 const TOOL = "suite_doc_detect_spec";
+const BROKER_REPO = process.env.MCP_BROKER_REPO ?? resolve(import.meta.dirname, "../../mcp-permission-broker");
+const BROKER_PYTHON = process.env.MCP_BROKER_PYTHON ?? join(
+  BROKER_REPO, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python",
+);
+const FIXTURE_SCRIPT = join(BROKER_REPO, "tests/create_runtime_bridge_fixture.py");
+const execFileAsync = promisify(execFile);
 
-type SinkMode = "normal" | "outage" | "outcome-outage" | "bad-receipt" | "tampered-link" | "revoke-after-allow" | "expire-after-allow";
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
+type SinkMode = "normal" | "outage" | "outcome-outage" | "bad-receipt" | "tampered-link" | "revoke-after-allow" | "expire-after-allow" | "broker-revoke-after-allow" | "broker-condition-after-allow" | "broker-rollback-after-allow";
 
 describe("loopback Streamable HTTP source pilot", () => {
   let directory: string;
   let publicKeyFile: string;
   let policyFile: string;
+  let brokerConfigFile: string;
   let privateKey: ReturnType<typeof generateKeyPairSync>["privateKey"];
   let sink: Server;
   let sinkUrl: string;
@@ -44,6 +56,20 @@ describe("loopback Streamable HTTP source pilot", () => {
     const temporary = `${policyFile}.next`;
     await writeFile(temporary, value);
     await rename(temporary, policyFile);
+  }
+
+  async function updateBrokerSnapshot(change: (snapshot: Record<string, any>) => void): Promise<void> {
+    const snapshot = JSON.parse(await readFile(brokerConfigFile, "utf8")) as Record<string, any>;
+    change(snapshot);
+    const temporary = `${brokerConfigFile}.next`;
+    await writeFile(temporary, JSON.stringify(snapshot));
+    await rename(temporary, brokerConfigFile);
+  }
+
+  async function writeBrokerFixture(status?: "approved-with-conditions" | "rejected" | "withdrawn"): Promise<void> {
+    await execFileAsync(BROKER_PYTHON, [
+      FIXTURE_SCRIPT, brokerConfigFile, ...(status ? [status] : []),
+    ]);
   }
 
   function token(overrides: Record<string, unknown> = {}, header: Record<string, unknown> = {}): string {
@@ -119,10 +145,12 @@ describe("loopback Streamable HTTP source pilot", () => {
     directory = await mkdtemp(join(tmpdir(), "kinetic-secure-test-"));
     publicKeyFile = join(directory, "issuer-public.pem");
     policyFile = join(directory, "gate.json");
+    brokerConfigFile = join(directory, "broker.json");
     const pair = generateKeyPairSync("ed25519");
     privateKey = pair.privateKey;
     await writeFile(publicKeyFile, pair.publicKey.export({ format: "pem", type: "spki" }));
     await writePolicy();
+    await writeBrokerFixture();
     events = [];
     mode = "normal";
     sink = createServer(async (request, response) => {
@@ -141,6 +169,21 @@ describe("loopback Streamable HTTP source pilot", () => {
       if (event.kind === "tool_invocation_allowed") {
         if (mode === "revoke-after-allow") await writePolicy(["jti-1"]);
         if (mode === "expire-after-allow") await writePolicy([], [TOOL], Math.floor(Date.now() / 1000) - 1);
+        if (mode === "broker-revoke-after-allow") {
+          await updateBrokerSnapshot((snapshot) => { snapshot.revoked_jtis = ["jti-1"]; });
+        }
+        if (mode === "broker-condition-after-allow") {
+          await updateBrokerSnapshot((snapshot) => {
+            snapshot.principal_bindings[SUBJECT].conditions_satisfied["dpa-signed"] = false;
+          });
+        }
+        if (mode === "broker-rollback-after-allow") {
+          const earlierSnapshot = await readFile(brokerConfigFile);
+          await updateBrokerSnapshot((snapshot) => { snapshot.revoked_jtis = ["jti-1"]; });
+          const temporary = `${brokerConfigFile}.rollback`;
+          await writeFile(temporary, earlierSnapshot);
+          await rename(temporary, brokerConfigFile);
+        }
       }
       const receipt = {
         ...event,
@@ -163,6 +206,7 @@ describe("loopback Streamable HTTP source pilot", () => {
     pilot = await startSecurePilot({
       port: 0, issuer: ISSUER, publicKeyFile, policyFile,
       auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
     });
   });
 
@@ -185,6 +229,9 @@ describe("loopback Streamable HTTP source pilot", () => {
       ]);
       expect(events[0]?.source).toBe("mcp-kinetic-gain");
       expect(events[0]?.payload.client_id).toBe(CLIENT);
+      expect(events[0]?.payload.broker_correlation_id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(events[0]?.payload.broker_state_sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(events[0]?.payload.signed_card_decision_id).toBe("SYNTHETIC-BRIDGE-001");
       expect(events[1]?.payload.decision_event_id).toBe(1);
       expect(events[1]?.payload.correlation_id).toBe(events[0]?.payload.correlation_id);
       expect(JSON.stringify(events)).not.toContain("aeo_version");
@@ -266,6 +313,7 @@ describe("loopback Streamable HTTP source pilot", () => {
     const config = await loadSecureGateConfig({
       issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
       auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
     });
     const gate = new SecurePilotGate(config);
     const auth = verifyBearerToken(token(), config);
@@ -283,6 +331,139 @@ describe("loopback Streamable HTTP source pilot", () => {
     });
     expect(forged).toEqual({ text: "audit_receipt_unavailable", isError: true });
     expect(invoked).toBe(0);
+  });
+
+  it("blocks the handler for a valid signed rejected card, missing condition, or local snapshot revocation", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    const tryCall = () => gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+
+    await writeBrokerFixture("rejected");
+    expect((await tryCall()).isError).toBe(true);
+    await writeBrokerFixture();
+    await updateBrokerSnapshot((snapshot) => {
+      delete snapshot.principal_bindings[SUBJECT].conditions_satisfied["dpa-signed"];
+    });
+    expect((await tryCall()).isError).toBe(true);
+    await writeBrokerFixture();
+    await updateBrokerSnapshot((snapshot) => { snapshot.revoked_jtis = ["jti-1"]; });
+    expect((await tryCall()).isError).toBe(true);
+    await writeBrokerFixture();
+    await updateBrokerSnapshot((snapshot) => {
+      snapshot.revoked_decision_ids = ["SYNTHETIC-BRIDGE-001"];
+    });
+    expect((await tryCall()).isError).toBe(true);
+    expect(invoked).toBe(0);
+    expect(events.every((event) => event.kind !== "tool_invocation_allowed")).toBe(true);
+  });
+
+  it("rechecks Broker revocation and condition facts after the accepted receipt", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    for (const scenario of ["broker-revoke-after-allow", "broker-condition-after-allow"] as const) {
+      await writeBrokerFixture();
+      mode = scenario;
+      const result = await gate.invoke(TOOL, { body: {} }, auth, async () => {
+        invoked += 1;
+        return "handler-ran";
+      });
+      expect(result).toEqual({ text: "tool_not_permitted", isError: true });
+    }
+    expect(invoked).toBe(0);
+    expect(events.filter((event) => event.kind === "tool_invocation_allowed")).toHaveLength(2);
+  });
+
+  it("demonstrates unprotected identical-byte snapshot rollback without monotonic custody", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    mode = "broker-rollback-after-allow";
+    const result = await gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+    // The intermediary revocation is invisible after a full rollback to the
+    // exact earlier bytes. This is an explicit production blocker, not a pass
+    // for durable withdrawal semantics.
+    expect(result).toEqual({ text: "handler-ran", isError: false });
+    expect(invoked).toBe(1);
+  });
+
+  it("caps concurrent Broker children before spawning a fifth check", async () => {
+    const identity = {
+      clientId: CLIENT, subject: SUBJECT, jti: "jti-1",
+      expiresAt: Math.floor(Date.now() / 1000) + 120,
+    };
+    const checks = Array.from({ length: 5 }, () => checkBrokerDecision(
+      { pythonFile: BROKER_PYTHON, configFile: brokerConfigFile }, identity, TOOL,
+    ));
+    const settled = await Promise.allSettled(checks);
+    expect(settled.filter((item) => item.status === "fulfilled")).toHaveLength(4);
+    const denied = settled.filter((item) => item.status === "rejected") as PromiseRejectedResult[];
+    expect(denied).toHaveLength(1);
+    expect((denied[0]?.reason as Error).message).toBe("broker busy");
+  });
+
+  it("kills an unresponsive Broker child at the bounded timeout", async () => {
+    const isolatedVenv = join(directory, "hung-venv");
+    await execFileAsync(BROKER_PYTHON, ["-m", "venv", "--without-pip", isolatedVenv]);
+    const isolatedPython = join(isolatedVenv, process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+    const { stdout } = await execFileAsync(isolatedPython, ["-I", "-c", "import site; print(site.getsitepackages()[0])"]);
+    const packageDir = join(stdout.trim(), "mcp_permission_broker");
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(join(packageDir, "__init__.py"), "");
+    await writeFile(join(packageDir, "runtime_bridge.py"), [
+      "import signal, time",
+      "signal.signal(signal.SIGTERM, lambda *_: None)",
+      "while True: time.sleep(1)",
+    ].join("\n"));
+    const started = Date.now();
+    await expect(checkBrokerDecision(
+      { pythonFile: isolatedPython, configFile: brokerConfigFile },
+      { clientId: CLIENT, subject: SUBJECT, jti: "jti-1", expiresAt: Math.floor(Date.now() / 1000) + 120 },
+      TOOL,
+    )).rejects.toThrow("broker unavailable");
+    expect(Date.now() - started).toBeGreaterThanOrEqual(4_500);
+    expect(Date.now() - started).toBeLessThan(8_000);
+  });
+
+  it("fails closed if the Broker child is unavailable", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+    });
+    const gate = new SecurePilotGate({ ...config, pythonFile: join(directory, "missing-python.exe") });
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    const result = await gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+    expect(result).toEqual({ text: "broker_unavailable", isError: true });
+    expect(invoked).toBe(0);
+    expect(events.map((event) => event.kind)).toEqual(["tool_invocation_denied"]);
+    expect(events[0]?.payload.reason).toBe("broker_unavailable");
   });
 
   it("redacts sink error bodies from an actual MCP tool response", async () => {
@@ -322,6 +503,7 @@ describe("loopback Streamable HTTP source pilot", () => {
     await expect(loadSecureGateConfig({
       issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
       auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
     })).rejects.toThrow();
     await writePolicy();
     const client = await clientFor();
@@ -341,6 +523,7 @@ describe("loopback Streamable HTTP source pilot", () => {
     const config = await loadSecureGateConfig({
       issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
       auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
     });
     const gate = new SecurePilotGate(config);
     const auth = verifyBearerToken(token(), config);
@@ -359,6 +542,7 @@ describe("loopback Streamable HTTP source pilot", () => {
     const config = await loadSecureGateConfig({
       issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
       auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
     });
     const gate = new SecurePilotGate(config);
     const auth = verifyBearerToken(token(), config);
@@ -379,6 +563,7 @@ describe("loopback Streamable HTTP source pilot", () => {
     const config = await loadSecureGateConfig({
       issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
       auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
     });
     const gate = new SecurePilotGate(config);
     const auth = verifyBearerToken(token(), config);

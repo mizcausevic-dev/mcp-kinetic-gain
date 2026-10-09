@@ -1,6 +1,6 @@
 /**
- * Loopback-only MCP source pilot. This is a transport gate, not a Decision Card
- * or Broker policy decision. Only the explicitly selected pure tool can run.
+ * Loopback-only MCP source pilot with a mandatory signed-card Broker decision.
+ * Only the explicitly selected pure tool can run.
  */
 import { createPublicKey, randomUUID, verify, type KeyObject } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
@@ -8,6 +8,10 @@ import { isAbsolute } from "node:path";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
 import type { ToolDispatchGate } from "./server.js";
+import {
+  checkBrokerDecision, validateBrokerBridgeConfig,
+  type BrokerBridgeConfig, type BrokerDecision,
+} from "./broker-bridge.js";
 
 const SOURCE = "mcp-kinetic-gain";
 const PILOT_TOOL = "suite_doc_detect_spec";
@@ -22,7 +26,7 @@ const HASH = /^[0-9a-f]{64}$/;
 
 type JsonRecord = Record<string, unknown>;
 
-export interface SecureGateConfig {
+export interface SecureGateConfig extends BrokerBridgeConfig {
   issuer: string;
   resource: string;
   publicKey: KeyObject;
@@ -246,7 +250,9 @@ export class SecurePilotGate implements ToolDispatchGate {
   async availableTools(auth: AuthInfo | undefined): Promise<string[]> {
     const principal = principalFromAuth(auth, this.config);
     const policy = await readGatePolicy(this.config.policyFile);
-    return permitted(principal, policy, PILOT_TOOL) ? [PILOT_TOOL] : [];
+    if (!permitted(principal, policy, PILOT_TOOL)) return [];
+    const decision = await checkBrokerDecision(this.config, principal, PILOT_TOOL);
+    return decision.outcome === "allow" ? [PILOT_TOOL] : [];
   }
 
   async invoke(
@@ -279,10 +285,33 @@ export class SecurePilotGate implements ToolDispatchGate {
       return { text: "tool_not_permitted", isError: true };
     }
 
+    let brokerDecision: BrokerDecision;
+    try {
+      brokerDecision = await checkBrokerDecision(this.config, principal, name);
+    } catch {
+      try {
+        await this.event("tool_invocation_denied", { ...basis, reason: "broker_unavailable" });
+      } catch {
+        // The handler remains blocked if the denial event cannot be recorded.
+      }
+      return { text: "broker_unavailable", isError: true };
+    }
+    if (brokerDecision.outcome !== "allow") {
+      try {
+        await this.event("tool_invocation_denied", { ...basis, reason: "broker_denied" });
+      } catch {
+        // A denied call stays denied when the sink is unavailable.
+      }
+      return { text: "tool_not_permitted", isError: true };
+    }
+
     let decision: AuditReceipt;
     try {
       decision = await this.event("tool_invocation_allowed", {
         ...basis, gate_config_version: 1,
+        broker_correlation_id: brokerDecision.brokerCorrelationId,
+        broker_state_sha256: brokerDecision.stateSha256,
+        signed_card_decision_id: brokerDecision.signedCardDecisionId,
       });
     } catch {
       return { text: "audit_receipt_unavailable", isError: true };
@@ -298,6 +327,28 @@ export class SecurePilotGate implements ToolDispatchGate {
         await this.event("tool_invocation_denied", { ...basis, reason: "gate_changed_after_receipt" });
       } catch {
         // A denial remains effective even when the sink cannot record it.
+      }
+      return { text: "tool_not_permitted", isError: true };
+    }
+    let freshBrokerDecision: BrokerDecision;
+    try {
+      freshBrokerDecision = await checkBrokerDecision(this.config, principal, name);
+    } catch {
+      try {
+        await this.event("tool_invocation_denied", { ...basis, reason: "broker_unavailable_after_receipt" });
+      } catch {
+        // No handler executes even if the denial event is unavailable.
+      }
+      return { text: "broker_unavailable", isError: true };
+    }
+    if (freshBrokerDecision.outcome !== "allow" ||
+        freshBrokerDecision.stateSha256 !== brokerDecision.stateSha256 ||
+        freshBrokerDecision.signedCardDecisionId !== brokerDecision.signedCardDecisionId ||
+        principal.expiresAt <= Math.floor(Date.now() / 1000)) {
+      try {
+        await this.event("tool_invocation_denied", { ...basis, reason: "broker_changed_after_receipt" });
+      } catch {
+        // No handler executes even if the denial event is unavailable.
       }
       return { text: "tool_not_permitted", isError: true };
     }
@@ -344,6 +395,8 @@ export async function loadSecureGateConfig(input: {
   policyFile: string;
   auditUrl: string;
   auditToken: string;
+  pythonFile: string;
+  configFile: string;
 }): Promise<SecureGateConfig> {
   let validAuditUrl = false;
   try {
@@ -364,6 +417,8 @@ export async function loadSecureGateConfig(input: {
   const publicKey = createPublicKey(await readFile(input.publicKeyFile));
   if (publicKey.asymmetricKeyType !== "ed25519") throw new Error("secure pilot requires Ed25519 public key");
   await readGatePolicy(input.policyFile);
+  await validateBrokerBridgeConfig(input);
   return { issuer: input.issuer, resource: input.resource, publicKey,
-    policyFile: input.policyFile, auditUrl: input.auditUrl, auditToken: input.auditToken };
+    policyFile: input.policyFile, auditUrl: input.auditUrl, auditToken: input.auditToken,
+    pythonFile: input.pythonFile, configFile: input.configFile };
 }

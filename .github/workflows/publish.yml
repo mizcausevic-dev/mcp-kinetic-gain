@@ -43,6 +43,24 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org/'
 
+      - name: Check out the pinned signed-card Broker for verification
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          repository: mizcausevic-dev/mcp-permission-broker
+          ref: 614b630c2dd1dea1b63526ea94f256e8dfcb50b0
+          path: broker
+          persist-credentials: false
+
+      - name: Set up Python 3.11 for Broker integration tests
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install pinned Broker bridge for verification
+        run: |
+          python -m venv broker/.venv
+          broker/.venv/bin/python -m pip install -e './broker[host]'
+
       - name: Verify tag, package, and Registry manifest versions
         run: |
           tag_version="${GITHUB_REF_NAME#v}"
@@ -68,6 +86,9 @@ jobs:
           npm audit signatures
 
       - name: Typecheck, test, and build
+        env:
+          MCP_BROKER_REPO: ${{ github.workspace }}/broker
+          MCP_BROKER_PYTHON: ${{ github.workspace }}/broker/.venv/bin/python
         run: |
           npm run typecheck
           npm test

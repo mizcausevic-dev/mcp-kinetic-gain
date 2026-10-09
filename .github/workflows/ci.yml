@@ -23,8 +23,24 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: ${{ matrix.node-version }}
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          repository: mizcausevic-dev/mcp-permission-broker
+          ref: 614b630c2dd1dea1b63526ea94f256e8dfcb50b0
+          path: broker
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: "3.11"
+      - name: Install pinned Broker bridge for cross-repo integration tests
+        run: |
+          python -m venv broker/.venv
+          broker/.venv/bin/python -m pip install -e './broker[host]'
       - run: npm ci
       - run: npm audit --audit-level=high
       - run: npm run typecheck
       - run: npm test
+        env:
+          MCP_BROKER_REPO: ${{ github.workspace }}/broker
+          MCP_BROKER_PYTHON: ${{ github.workspace }}/broker/.venv/bin/python
       - run: npm run build
