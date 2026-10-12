@@ -38,6 +38,8 @@ export interface SecureGateConfig extends BrokerBridgeConfig {
   auditUrl: string;
   auditToken: string;
   externalRevocation?: RevocationReader;
+  initialExternalRevision: number;
+  initialExternalFingerprint?: string;
 }
 
 interface Principal {
@@ -55,6 +57,16 @@ interface GatePolicy {
 interface AuditReceipt {
   event_id: number;
   hash: string;
+}
+
+function revocationFingerprint(document: RevocationDocument): string {
+  return JSON.stringify([
+    document.revision,
+    [...document.revokedJtis].sort(),
+    [...document.revokedSubjects].sort(),
+    [...document.revokedClientIds].sort(),
+    [...document.revokedDecisionIds].sort(),
+  ]);
 }
 
 function record(value: unknown): value is JsonRecord {
@@ -222,19 +234,30 @@ async function boundedResponse(response: Response): Promise<JsonRecord> {
 }
 
 export class SecurePilotGate implements ToolDispatchGate {
-  private highestExternalRevision = 0;
-  constructor(private readonly config: SecureGateConfig) {}
+  private highestExternalRevision: number;
+  private highestExternalFingerprint: string | undefined;
+  constructor(private readonly config: SecureGateConfig) {
+    this.highestExternalRevision = config.initialExternalRevision;
+    this.highestExternalFingerprint = config.initialExternalFingerprint;
+  }
 
   private async readExternalRevocation(
     principal: Principal, decisionId?: string,
   ): Promise<RevocationDocument | undefined> {
     if (!this.config.externalRevocation) return undefined;
     const document = await this.config.externalRevocation.read();
+    const fingerprint = revocationFingerprint(document);
     if (document.revision < this.highestExternalRevision ||
-        revoked(document, principal, decisionId)) {
+        (document.revision === this.highestExternalRevision &&
+          this.highestExternalFingerprint !== undefined &&
+          fingerprint !== this.highestExternalFingerprint)) {
       throw new Error("external revocation denied");
     }
-    this.highestExternalRevision = document.revision;
+    if (document.revision > this.highestExternalRevision) {
+      this.highestExternalRevision = document.revision;
+      this.highestExternalFingerprint = fingerprint;
+    }
+    if (revoked(document, principal, decisionId)) throw new Error("external revocation denied");
     return document;
   }
 
@@ -485,8 +508,18 @@ export async function loadSecureGateConfig(input: {
   if (publicKey.asymmetricKeyType !== "ed25519") throw new Error("secure pilot requires Ed25519 public key");
   await readGatePolicy(input.policyFile);
   await validateBrokerBridgeConfig(input);
-  if (input.requireExternalRevocation) await externalRevocation?.read();
+  let initialExternalRevision = 0;
+  let initialExternalFingerprint: string | undefined;
+  if (input.requireExternalRevocation) {
+    const initial = await externalRevocation?.read();
+    if (!initial || !Number.isSafeInteger(initial.revision) || initial.revision < 1) {
+      throw new Error("invalid initial external revocation revision");
+    }
+    initialExternalRevision = initial.revision;
+    initialExternalFingerprint = revocationFingerprint(initial);
+  }
   return { issuer: input.issuer, resource: input.resource, publicKey,
     policyFile: input.policyFile, auditUrl: input.auditUrl, auditToken: input.auditToken,
-    pythonFile: input.pythonFile, configFile: input.configFile, externalRevocation };
+    pythonFile: input.pythonFile, configFile: input.configFile, externalRevocation,
+    initialExternalRevision, initialExternalFingerprint };
 }

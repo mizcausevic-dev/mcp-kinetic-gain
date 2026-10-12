@@ -29,7 +29,7 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function boundedBody(response: Response, maxBytes: number): Promise<unknown> {
+async function boundedBody(response: Response, maxBytes: number): Promise<string> {
   if (response.status !== 200) throw new Error("revocation source unavailable");
   const length = response.headers.get("content-length");
   if (length !== null && (!/^\d+$/.test(length) || Number(length) > maxBytes)) {
@@ -49,7 +49,18 @@ async function boundedBody(response: Response, maxBytes: number): Promise<unknow
     }
     chunks.push(Buffer.from(value));
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function parseRevocationJson(raw: string): unknown {
+  // This document permits only ASCII keys and identifier strings. Escapes are
+  // unnecessary, and rejecting them keeps duplicate-key detection unambiguous.
+  if (raw.includes("\\")) throw new Error("invalid revocation document");
+  const keys = [...raw.matchAll(/"([^"]+)"\s*:/g)].map((match) => match[1]);
+  if (keys.length !== 7 || new Set(keys).size !== 7) {
+    throw new Error("invalid revocation document");
+  }
+  return JSON.parse(raw) as unknown;
 }
 
 function ids(value: unknown): ReadonlySet<string> {
@@ -91,7 +102,7 @@ export function gcsRevocationReader(
         headers: { "metadata-flavor": "Google" }, redirect: "error",
         signal: AbortSignal.timeout(1_000),
       });
-      const token = await boundedBody(metadata, MAX_TOKEN_RESPONSE_BYTES);
+      const token: unknown = JSON.parse(await boundedBody(metadata, MAX_TOKEN_RESPONSE_BYTES));
       if (!record(token) || token.token_type !== "Bearer" ||
           typeof token.access_token !== "string" ||
           !/^[A-Za-z0-9._~+/-]{20,4096}={0,2}$/.test(token.access_token)) {
@@ -101,7 +112,7 @@ export function gcsRevocationReader(
         headers: { authorization: `Bearer ${token.access_token}`, "cache-control": "no-store" },
         redirect: "error", signal: AbortSignal.timeout(2_000),
       });
-      return parseRevocationDocument(await boundedBody(response, MAX_DOCUMENT_BYTES));
+      return parseRevocationDocument(parseRevocationJson(await boundedBody(response, MAX_DOCUMENT_BYTES)));
     },
   };
 }

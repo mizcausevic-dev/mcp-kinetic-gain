@@ -91,7 +91,10 @@ has this schema:
 rejects missing, stale, malformed, oversized, or inaccessible records. It
 checks once before the Broker and again after the accepted pre-dispatch audit
 receipt; it also checks the Broker's signed card decision ID. A lower revision
-than one already seen by the process is denied. Restoring older VM policy and
+than the startup record or one already seen by the process is denied. A
+same-revision record with different withdrawal sets is also denied; refreshing
+`valid_until` without changing those sets is allowed. Duplicate or escaped
+JSON keys are rejected before parsing. Restoring older VM policy and
 Broker files cannot clear a withdrawal held in the external object. This
 depends on separate write custody and IAM, which have not been configured or
 verified. The revocation writer must update this mutable object and is separate
@@ -175,9 +178,12 @@ The review CI pins the Broker source commit and installs its Python 3.11 host
 dependencies from `docs/broker-host-requirements.lock` with package hashes.
 The Broker wheel is then built from that pinned source without resolving new
 dependencies. The lock was installed and checked in a disposable Windows
-Python 3.11 environment; Linux CI and a hosted artifact remain to be verified
-at the final reviewed commit. A private release still needs package integrity
-and provenance evidence for the actual deployed bytes.
+Python 3.11 environment, and the prior review head's Node 20/22 Linux CI
+passed. Final-head CI must pass again after this fix. A local Linux Docker
+image archive has been built and smoke tested without network access, but its
+final source hash and a hosted artifact remain to be verified. A
+private release still needs package integrity and provenance evidence for the
+actual deployed bytes.
 
 To roll back this unshipped source pilot, stop `node dist/secure-http.js` and
 revert its review branch. It has no production state or public package to

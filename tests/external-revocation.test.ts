@@ -53,4 +53,22 @@ describe("external revocation source", () => {
     expect(() => gcsRevocationReader({ bucket: "kg-pilot-custody", object: "../other" })).toThrow();
     expect(() => gcsRevocationReader({ bucket: "https://example.com", object: "current.json" })).toThrow();
   });
+
+  it("rejects duplicate or escaped revocation keys before JSON parsing", async () => {
+    for (const body of [
+      JSON.stringify(current()).replace('"revision":7', '"revision":7,"revision":6'),
+      JSON.stringify(current()).replace('"revision":7', '"revision":7,"re\\u0076ision":6'),
+    ]) {
+      let calls = 0;
+      const fetcher = (async () => {
+        calls += 1;
+        return new Response(calls === 1
+          ? JSON.stringify({ token_type: "Bearer", access_token: "a".repeat(40) })
+          : body);
+      }) as typeof fetch;
+      await expect(gcsRevocationReader({
+        bucket: "kg-pilot-custody", object: "revocations/current.json",
+      }, fetcher).read()).rejects.toThrow("invalid revocation document");
+    }
+  });
 });
