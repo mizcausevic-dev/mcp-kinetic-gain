@@ -82,12 +82,13 @@ export const toolDescriptors = [
   },
   {
     name: "prompt_provenance_inspect",
-    description: "Structured summary of a Prompt Provenance document: prompt identity, lineage, approval state, evaluation suites.",
+    description: "Inspect an inline Prompt Provenance JSON document. Returns JSON text with prompt identity, declared lineage and approval state, evaluation suites, and authorship. Read-only and offline; malformed or schema-invalid input is an MCP tool error. Use prompt_provenance_validate for a pass/fail result or prompt_provenance_eval_result for one suite.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: "object",
       required: ["document_json"],
       additionalProperties: false,
-      properties: { document_json: { type: "string" } },
+      properties: { document_json: { type: "string", description: "Complete Prompt Provenance document serialized as JSON text, not a URL or parsed object; required with no default." } },
     },
   },
   {
@@ -160,22 +161,24 @@ export const toolDescriptors = [
   // --------------------------------------------------------------------------
   {
     name: "ai_evidence_validate",
-    description: "Validate an AI Evidence object against the v0.1 schema.",
+    description: "Check the structure of an inline AI Evidence JSON document. Returns JSON text {valid:true,evidence_id,synthesis_role} or {valid:false,reason} using the bundled schema; invalid input is a validation result. Read-only and offline. Does not fetch sources or verify hashes, signatures, or claim truth; use ai_evidence_verify_hash to compare candidate text with the declared hash.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: "object",
       required: ["document_json"],
       additionalProperties: false,
-      properties: { document_json: { type: "string" } },
+      properties: { document_json: { type: "string", description: "Complete AI Evidence object serialized as JSON text, not a URL or parsed object; required with no default." } },
     },
   },
   {
     name: "ai_evidence_inspect",
-    description: "Structured summary of an AI Evidence object: claim text, source metadata, retrieval method, synthesis role, hash, signed-or-not.",
+    description: "Inspect an inline AI Evidence JSON document. Returns JSON text with claim, source and retrieval fields, synthesis role, declared content hash, and signature-field presence. Read-only and offline; malformed or schema-invalid input is an MCP tool error. Does not verify source, hash, signature, or claim truth; use ai_evidence_validate for structure or ai_evidence_verify_hash for candidate text.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: "object",
       required: ["document_json"],
       additionalProperties: false,
-      properties: { document_json: { type: "string" } },
+      properties: { document_json: { type: "string", description: "Complete AI Evidence object serialized as JSON text, not a URL or parsed object; required with no default." } },
     },
   },
   {
@@ -479,13 +482,14 @@ export const toolDescriptors = [
   },
   {
     name: "clinical_ai_inspect",
-    description: "Structured summary of a Clinical AI Card: system identity, clinical context (indication / care settings / patient population), regulatory posture (FDA / SaMD), clinical role, evidence (validation studies + bias audit + performance metrics), HIPAA + BAA posture, EHR integration (FHIR / SMART / CDS Hooks), safety + mandated reporting.",
+    description: "Summarize an existing Clinical AI Card, inline or by URL. Returns JSON text of the card's declared clinical, regulatory, evidence, patient-data, safety, and EHR fields; it does not verify FDA or HIPAA status or clinical suitability. URL mode makes an outbound GET to a public HTTP(S) address; malformed or missing input is an MCP tool error. Use clinical_ai_validate for structural checks or clinical_ai_fetch for the full card.",
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
-        url: { type: "string", format: "uri" },
-        document_json: { type: "string" },
+        url: { type: "string", format: "uri", description: "Public HTTP(S) URL of an existing Clinical AI Card JSON file. The server fetches it; ignored when document_json is non-empty." },
+        document_json: { type: "string", description: "Complete Clinical AI Card serialized as JSON text, not a parsed object. Takes precedence over url when non-empty; provide this or url." },
       },
     },
   },
