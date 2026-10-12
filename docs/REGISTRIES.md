@@ -1,5 +1,16 @@
 # Distribution and release state
 
+## Observed on 2026-10-12 UTC
+
+| Surface | Observed state | Evidence |
+| --- | --- | --- |
+| GitHub `v0.10.0` tag | Annotated tag resolves to commit `a0f368ce9152dc5854ed1755f90c2e64b987860d` | Fresh GitHub tag-ref and tag-object reads |
+| GitHub Release | [`v0.10.0`](https://github.com/mizcausevic-dev/mcp-kinetic-gain/releases/tag/v0.10.0), published 2026-10-08 UTC | Fresh release read; `cyclonedx.json` is listed with GitHub asset digest `sha256:21a4a77a90c787270ad4ad4fbebaf4591bf051834fcda153464be479baf9da2a` |
+| npm `latest` | `0.10.0` | Fresh `npm view mcp-kinetic-gain version dist-tags --prefer-online --fetch-retries=0 --fetch-timeout=12000 --json` |
+| Official MCP Registry `latest` | Server and npm package version `0.10.0`, status `active`, `isLatest=true` | Fresh exact-name [Registry latest record](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.mizcausevic-dev%2Fmcp-kinetic-gain/versions/latest) |
+
+These observations verify the public distribution identities and versions, not the behavior of a hosted Glama instance or the draft private signed-Broker pilot. The `v0.10.0` package predates that pilot. The 2026-09-30 `0.9.3` evidence below remains a historical snapshot.
+
 ## Observed on 2026-09-30 UTC
 
 | Surface | Observed state | Evidence |
