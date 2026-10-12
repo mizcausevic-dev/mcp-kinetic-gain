@@ -10,6 +10,7 @@ const httpsUri = z.string().url().refine((value) => value.startsWith("https://")
   message: "expected an HTTPS URI",
 });
 const systemId = z.string().max(80).regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
+const stableId = z.string().max(80).regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/);
 
 function uniqueStrings<T extends z.ZodTypeAny>(item: T) {
   return z.array(item).superRefine((values, ctx) => {
@@ -29,10 +30,25 @@ const standardPosture = z.object({
   }
 });
 
+const binRef = z.object({
+  dimension: stableId,
+  bin: stableId,
+}).strict();
+
 const conditionEvidence = z.object({
   condition: nonempty,
+  condition_id: stableId.optional(),
+  bin_refs: z.array(binRef).optional(),
   evidence_refs: uniqueStrings(httpsUri),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if ((value.condition_id === undefined) !== (value.bin_refs === undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "condition_id and bin_refs must appear together" });
+  }
+  const pairs = (value.bin_refs ?? []).map(({ dimension, bin }) => `${dimension}:${bin}`);
+  if (new Set(pairs).size !== pairs.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["bin_refs"], message: "duplicate ODD bin reference" });
+  }
+});
 
 export const aviationMlCardSchema = z.object({
   aviation_ml_card_version: z.literal("0.1"),
@@ -50,9 +66,9 @@ export const aviationMlCardSchema = z.object({
     standards_posture: z.array(standardPosture).superRefine((values, ctx) => {
       const seen = new Set<string>();
       for (const [index, value] of values.entries()) {
-        const key = JSON.stringify([value.identifier, value.status, value.evidence_uri ?? null]);
+        const key = value.identifier;
         if (seen.has(key)) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index], message: "duplicate standards posture entry" });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index], message: "duplicate standards identifier" });
         }
         seen.add(key);
       }
@@ -120,6 +136,18 @@ export const aviationMlCardSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["odd", "condition_evidence"], message: `missing evidence mapping for ${condition}` });
     }
   }
+  for (const condition of card.odd.excluded_conditions) {
+    if (declared.has(condition)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["odd", "excluded_conditions"], message: `excluded condition is also operating: ${condition}` });
+    }
+  }
+  const ids = card.odd.condition_evidence.map((entry) => entry.condition_id).filter((id) => id !== undefined);
+  if (ids.length > 0 && ids.length !== card.odd.condition_evidence.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["odd", "condition_evidence"], message: "every ODD condition needs an ID when bin mapping is used" });
+  }
+  if (new Set(ids).size !== ids.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["odd", "condition_evidence"], message: "duplicate ODD condition ID" });
+  }
 });
 
 export type AviationMlCard = z.infer<typeof aviationMlCardSchema>;
@@ -162,6 +190,12 @@ export const mroSignoffCardSchema = z.object({
   }
   if (card.human_review.decision === "override" && !card.human_review.override_reason) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["human_review", "override_reason"], message: "required for decision=override" });
+  }
+  if (card.human_review.decision !== "override" && card.human_review.override_reason !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["human_review", "override_reason"], message: "only permitted for decision=override" });
+  }
+  if (Date.parse(card.signature.signed_at) < Date.parse(card.human_review.reviewed_at)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["signature", "signed_at"], message: "signature predates human review" });
   }
 });
 

@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { getPublicKeyAsync, signAsync } from "@noble/ed25519";
@@ -104,6 +106,17 @@ async function signedMroFixture() {
 }
 
 describe("aviation v0.1 disclosure tools", () => {
+  it("accepts the source spec's synthetic golden Card with declared condition/bin IDs", async () => {
+    // Vendored from aviation-ml-assurance-card-spec PR #1 at e9a70c6.
+    const fixture = new URL("./fixtures/aviation-golden-card.json", import.meta.url);
+    const documentJson = readFileSync(fixture, "utf8");
+    const card = JSON.parse(documentJson);
+    expect(aviationMlCardSchema.safeParse(card).success).toBe(true);
+    expect(JSON.parse(await handleAviationMlCardValidate({ document_json: documentJson }))).toMatchObject({ valid: true, evidence_verified: false });
+    expect(JSON.parse(await handleAviationMlCardOddCheck({ document_json: documentJson })).coverage_adequacy).toBe("not_assessed");
+    expect(await runValidate([fileURLToPath(fixture)])).toBe(0);
+  });
+
   it("validates the synthetic card and rejects reserved Level 3B and missing overrides", async () => {
     expect(aviationMlCardSchema.safeParse(aviationCard).success).toBe(true);
     const valid = JSON.parse(await handleAviationMlCardValidate({ document_json: JSON.stringify(aviationCard) }));
@@ -129,6 +142,44 @@ describe("aviation v0.1 disclosure tools", () => {
     expect(check.global_coverage_report_referenced).toBe(true);
     expect(check.independently_verified).toBe(false);
     expect(check.coverage_adequacy).toBe("not_assessed");
+  });
+
+  it("enforces optional ODD mapping IDs, paired bin refs, and source semantic rules", () => {
+    const mapped = copy(aviationCard) as Record<string, any>;
+    mapped.odd.condition_evidence[0].condition_id = "stationary-inspection";
+    mapped.odd.condition_evidence[0].bin_refs = [{ dimension: "inspection-mode", bin: "stationary" }];
+    mapped.odd.condition_evidence[1].condition_id = "declared-illumination";
+    mapped.odd.condition_evidence[1].bin_refs = [];
+    expect(aviationMlCardSchema.safeParse(mapped).success).toBe(true);
+
+    const partial = copy(mapped);
+    delete partial.odd.condition_evidence[1].condition_id;
+    delete partial.odd.condition_evidence[1].bin_refs;
+    expect(aviationMlCardSchema.safeParse(partial).success).toBe(false);
+
+    const unpaired = copy(mapped);
+    delete unpaired.odd.condition_evidence[0].bin_refs;
+    expect(aviationMlCardSchema.safeParse(unpaired).success).toBe(false);
+
+    const duplicateId = copy(mapped);
+    duplicateId.odd.condition_evidence[1].condition_id = "stationary-inspection";
+    expect(aviationMlCardSchema.safeParse(duplicateId).success).toBe(false);
+
+    const duplicateBin = copy(mapped);
+    duplicateBin.odd.condition_evidence[0].bin_refs.push({ dimension: "inspection-mode", bin: "stationary" });
+    expect(aviationMlCardSchema.safeParse(duplicateBin).success).toBe(false);
+
+    const invalidId = copy(mapped);
+    invalidId.odd.condition_evidence[0].condition_id = "INVALID ID";
+    expect(aviationMlCardSchema.safeParse(invalidId).success).toBe(false);
+
+    const overlap = copy(aviationCard);
+    overlap.odd.excluded_conditions.push("stationary inspection");
+    expect(aviationMlCardSchema.safeParse(overlap).success).toBe(false);
+
+    const repeatedStandard = copy(aviationCard);
+    repeatedStandard.assurance.standards_posture.push({ identifier: "SAE ARP6983", status: "mapping_in_progress" });
+    expect(aviationMlCardSchema.safeParse(repeatedStandard).success).toBe(false);
   });
 
   it("inspects declarations and reports DAL documentation gaps without certification claims", async () => {
@@ -198,6 +249,14 @@ describe("MRO sign-off signature boundary", () => {
     const override = copy(mroCard);
     override.human_review.decision = "override";
     expect(mroSignoffCardSchema.safeParse(override).success).toBe(false);
+
+    const strayReason = copy(mroCard) as Record<string, any>;
+    strayReason.human_review.override_reason = "Not an override";
+    expect(mroSignoffCardSchema.safeParse(strayReason).success).toBe(false);
+
+    const earlySignature = copy(mroCard);
+    earlySignature.signature.signed_at = "2026-10-12T13:59:00Z";
+    expect(mroSignoffCardSchema.safeParse(earlySignature).success).toBe(false);
   });
 
   it("rejects raw duplicate keys and unsafe integer literals before MRO signature checking", async () => {
