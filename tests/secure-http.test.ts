@@ -673,6 +673,25 @@ describe("loopback Streamable HTTP source pilot", () => {
     }
   });
 
+  it("does not enter the handler when the pre-dispatch audit receipt is unavailable", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    mode = "outage";
+    const result = await gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+    expect(result).toEqual({ text: "audit_receipt_unavailable", isError: true });
+    expect(invoked).toBe(0);
+    expect(events).toEqual([]);
+  });
+
   it("rechecks revocation after receipt and before the handler", async () => {
     const client = await clientFor();
     try {
