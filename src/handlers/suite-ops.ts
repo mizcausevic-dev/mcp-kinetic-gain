@@ -28,6 +28,8 @@ const SPEC_BY_VERSION_FIELD: Record<string, string> = {
   incident_card_version: "incident-card",
   decision_card_version: "decision-card",
   claims_card_version: "claims-card",
+  aviation_ml_card_version: "aviation-ml-card",
+  mro_signoff_card_version: "mro-signoff-card",
 };
 
 /**

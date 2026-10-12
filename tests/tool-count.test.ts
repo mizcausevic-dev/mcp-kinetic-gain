@@ -59,9 +59,9 @@ describe("tool-count drift guard", () => {
 
   it("startup banner stays dynamic (never hardcodes the count)", () => {
     const server = read("src/server.ts");
-    // Banner must interpolate the array length...
+    // Banner must interpolate the selected profile length (75 default, 80 aviation)...
     expect(server).toMatch(
-      /listening on stdio \(\$\{toolDescriptors\.length\} tools/,
+      /listening on stdio \(\$\{profile\.descriptors\.length\} tools/,
     );
     // ...and must never hardcode a numeric count there.
     expect(server).not.toMatch(/listening on stdio \(\d+ tools/);

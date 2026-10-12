@@ -1360,11 +1360,13 @@ describe("CLI dispatch", () => {
     expect(out.exitCode).toBe(0);
   });
 
-  it("keeps CLI help aligned with all 12 Suite spec detectors", () => {
+  it("keeps CLI help aligned with 12 base spec and 2 aviation card detectors", () => {
     const cliSource = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
-    expect(cliSource).toContain("against the 12 specs");
+    expect(cliSource).toContain("against 12 base specs and 2 aviation cards");
     expect(cliSource).toContain("decision_card_version");
     expect(cliSource).toContain("claims_card_version");
+    expect(cliSource).toContain("aviation_ml_card_version");
+    expect(cliSource).toContain("mro_signoff_card_version");
   });
 
   it("rejects unknown flags with exit code 3", async () => {
