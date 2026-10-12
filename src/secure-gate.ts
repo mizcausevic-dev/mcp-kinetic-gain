@@ -40,6 +40,7 @@ export interface SecureGateConfig extends BrokerBridgeConfig {
   externalRevocation?: RevocationReader;
   initialExternalRevision: number;
   initialExternalFingerprint?: string;
+  initialExternalDocument?: RevocationDocument;
 }
 
 interface Principal {
@@ -67,6 +68,23 @@ function revocationFingerprint(document: RevocationDocument): string {
     [...document.revokedClientIds].sort(),
     [...document.revokedDecisionIds].sort(),
   ]);
+}
+
+function copyRevocationDocument(document: RevocationDocument): RevocationDocument {
+  return {
+    revision: document.revision,
+    revokedJtis: new Set(document.revokedJtis),
+    revokedSubjects: new Set(document.revokedSubjects),
+    revokedClientIds: new Set(document.revokedClientIds),
+    revokedDecisionIds: new Set(document.revokedDecisionIds),
+  };
+}
+
+function retainsWithdrawals(previous: RevocationDocument, current: RevocationDocument): boolean {
+  return [...previous.revokedJtis].every((id) => current.revokedJtis.has(id)) &&
+    [...previous.revokedSubjects].every((id) => current.revokedSubjects.has(id)) &&
+    [...previous.revokedClientIds].every((id) => current.revokedClientIds.has(id)) &&
+    [...previous.revokedDecisionIds].every((id) => current.revokedDecisionIds.has(id));
 }
 
 function record(value: unknown): value is JsonRecord {
@@ -236,9 +254,12 @@ async function boundedResponse(response: Response): Promise<JsonRecord> {
 export class SecurePilotGate implements ToolDispatchGate {
   private highestExternalRevision: number;
   private highestExternalFingerprint: string | undefined;
+  private highestExternalDocument: RevocationDocument | undefined;
   constructor(private readonly config: SecureGateConfig) {
     this.highestExternalRevision = config.initialExternalRevision;
     this.highestExternalFingerprint = config.initialExternalFingerprint;
+    this.highestExternalDocument = config.initialExternalDocument &&
+      copyRevocationDocument(config.initialExternalDocument);
   }
 
   private async readExternalRevocation(
@@ -250,12 +271,15 @@ export class SecurePilotGate implements ToolDispatchGate {
     if (document.revision < this.highestExternalRevision ||
         (document.revision === this.highestExternalRevision &&
           this.highestExternalFingerprint !== undefined &&
-          fingerprint !== this.highestExternalFingerprint)) {
+          fingerprint !== this.highestExternalFingerprint) ||
+        (this.highestExternalDocument !== undefined &&
+          !retainsWithdrawals(this.highestExternalDocument, document))) {
       throw new Error("external revocation denied");
     }
     if (document.revision > this.highestExternalRevision) {
       this.highestExternalRevision = document.revision;
       this.highestExternalFingerprint = fingerprint;
+      this.highestExternalDocument = copyRevocationDocument(document);
     }
     if (revoked(document, principal, decisionId)) throw new Error("external revocation denied");
     return document;
@@ -510,6 +534,7 @@ export async function loadSecureGateConfig(input: {
   await validateBrokerBridgeConfig(input);
   let initialExternalRevision = 0;
   let initialExternalFingerprint: string | undefined;
+  let initialExternalDocument: RevocationDocument | undefined;
   if (input.requireExternalRevocation) {
     const initial = await externalRevocation?.read();
     if (!initial || !Number.isSafeInteger(initial.revision) || initial.revision < 1) {
@@ -517,9 +542,10 @@ export async function loadSecureGateConfig(input: {
     }
     initialExternalRevision = initial.revision;
     initialExternalFingerprint = revocationFingerprint(initial);
+    initialExternalDocument = copyRevocationDocument(initial);
   }
   return { issuer: input.issuer, resource: input.resource, publicKey,
     policyFile: input.policyFile, auditUrl: input.auditUrl, auditToken: input.auditToken,
     pythonFile: input.pythonFile, configFile: input.configFile, externalRevocation,
-    initialExternalRevision, initialExternalFingerprint };
+    initialExternalRevision, initialExternalFingerprint, initialExternalDocument };
 }

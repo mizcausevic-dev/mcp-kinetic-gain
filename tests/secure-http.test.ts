@@ -506,6 +506,32 @@ describe("loopback Streamable HTTP source pilot", () => {
     ]);
   });
 
+  it("denies a higher revision that removes an observed withdrawal", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+      revocationReader: externalReader, requireExternalRevocation: true,
+    });
+    config.pythonFile = join(directory, "missing-broker-python");
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    const call = () => gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+    externalDocument = { ...externalDocument, revision: 2, revokedJtis: new Set(["jti-1"]) };
+    expect(await call()).toEqual({ text: "tool_not_permitted", isError: true });
+    externalDocument = { ...externalDocument, revision: 3, revokedJtis: new Set() };
+    expect(await call()).toEqual({ text: "tool_not_permitted", isError: true });
+    expect(invoked).toBe(0);
+    expect(events.map((event) => [event.kind, event.payload.reason])).toEqual([
+      ["tool_invocation_denied", "external_revocation_unavailable_or_denied"],
+      ["tool_invocation_denied", "external_revocation_unavailable_or_denied"],
+    ]);
+  });
+
   it("denies an unavailable external withdrawal source and a withdrawal after audit acceptance", async () => {
     const config = await loadSecureGateConfig({
       issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,

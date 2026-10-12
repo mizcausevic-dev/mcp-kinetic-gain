@@ -92,8 +92,10 @@ rejects missing, stale, malformed, oversized, or inaccessible records. It
 checks once before the Broker and again after the accepted pre-dispatch audit
 receipt; it also checks the Broker's signed card decision ID. A lower revision
 than the startup record or one already seen by the process is denied. A
-same-revision record with different withdrawal sets is also denied; refreshing
-`valid_until` without changing those sets is allowed. Duplicate or escaped
+same-revision record with different withdrawal sets is also denied. A higher
+revision may add withdrawals but cannot remove any already observed during
+this process. Refreshing `valid_until` without changing those sets is allowed.
+Duplicate or escaped
 JSON keys are rejected before parsing. Restoring older VM policy and
 Broker files cannot clear a withdrawal held in the external object. This
 depends on separate write custody and IAM, which have not been configured or
