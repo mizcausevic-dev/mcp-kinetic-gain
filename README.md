@@ -89,6 +89,31 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 </details>
 <!-- END TOOL CATALOG -->
 
+## Optional Aerospace vertical
+
+The source checkout includes five **local, read-only** tools for two aviation
+cards. The default `tools/list` remains the existing 75 tools. Set
+`MCP_KG_VERTICALS=aviation` on the **same** MCP server entry and restart the
+client to list 80 tools. An unknown profile fails startup rather than silently
+changing the tool set. The aviation cards are also recognized by the CLI and
+`suite_doc_detect_spec` without enabling the MCP profile.
+CLI validation checks card structure and Suite rules only; `mro_signoff_verify`
+is the separate cryptographic check and still requires an externally trusted key.
+
+| Tool | Result and limit |
+| --- | --- |
+| `aviation_ml_card_validate` | Structural v0.1 card validation; no airworthiness approval. |
+| `aviation_ml_card_inspect` | Summary of vendor declarations; referenced evidence is not fetched. |
+| `aviation_ml_card_odd_check` | Flags operating conditions with no evidence reference; does not judge dataset coverage. |
+| `aviation_ml_card_dal_check` | Summarizes proposed target DAL and documentation gaps; does not assign or certify a DAL. |
+| `mro_signoff_verify` | Checks a JCS-SHA256-Ed25519 signature against a caller-pinned key and optional independent artifact digest. It does not verify staff identity or authority and cannot authorize return to service. |
+
+For Claude Desktop, add `"env": { "MCP_KG_VERTICALS": "aviation" }` inside the
+existing `kinetic-gain` config entry. These tools take inline `document_json`;
+none fetch a card, evidence URL, dataset, or authority record. Keep real
+maintenance, aircraft, and controlled technical data out of hosted MCP clients
+unless that client's retention and access boundary has been approved.
+
 Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fetch tools. Specs **without** one (Prompt Provenance, AI Evidence - these usually travel inline with answers or in repos, not at fixed paths) get parse tools that take a `document_json` string.
 
 ## Network and data boundaries
@@ -97,7 +122,7 @@ In the default stdio preview, URL fetch tools make outbound HTTP(S) requests to 
 
 ### Unreleased loopback source pilot
 
-This branch also contains a separate `node dist/secure-http.js` entry point for a **one-tool source pilot**; it is not part of the currently published npm or MCP Registry version. After `npm run build`, it binds only to `127.0.0.1` and uses SDK v1 Streamable HTTP. A short-lived Ed25519 bearer token with an exact resource audience, a server-owned expiring client allowlist, a Python Broker signed-card decision, and an accepted scoped Audit Sink receipt gate the `suite_doc_detect_spec` MCP call. The usual `mcp-kinetic-gain` stdio entry point remains an ungated local preview with 75 tools. Do not expose or proxy that command as a governed runtime.
+This branch also contains a separate `node dist/secure-http.js` entry point for a **one-tool source pilot**; it is not part of the currently published npm or MCP Registry version. After `npm run build`, it binds only to `127.0.0.1` and uses SDK v1 Streamable HTTP. A short-lived Ed25519 bearer token with an exact resource audience, a server-owned expiring client allowlist, a Python Broker signed-card decision, and an accepted scoped Audit Sink receipt gate the `suite_doc_detect_spec` MCP call. That governed endpoint always uses the base profile even if `MCP_KG_VERTICALS=aviation` is set. The usual `mcp-kinetic-gain` stdio entry point remains an ungated local preview with 75 tools by default or 80 with aviation enabled. Do not expose or proxy that command as a governed runtime.
 
 See [the source pilot contract](docs/SECURE_HTTP_PILOT.md) for the required environment, bounded local policy and Broker snapshots, audit event lifecycle, tests, and rollback. The pilot does not issue OAuth tokens, establish real buyer or condition authority, or provide a complete production audit trail. Its local revocation snapshots can be rolled back to an older valid state. This unpublished branch adds a synthetic Cloud Storage withdrawal reader for the proposed private GCE CLI; it has only local mock coverage and requires separately approved IAM, a writer outside the VM, and a hosted drill. The same project owner can still replace that source, so this is not independent custody. A change after the last Broker check can still race handler entry. Do not publish or publicly route it as production enforcement.
 
