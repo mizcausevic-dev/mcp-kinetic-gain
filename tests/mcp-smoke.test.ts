@@ -6,6 +6,56 @@ import { describe, expect, it } from "vitest";
 import { buildServer } from "../src/server.js";
 
 describe("MCP protocol smoke", () => {
+  it("advertises accurate input and safety metadata for the four inspected tools", async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = buildServer();
+    const client = new Client({ name: "tool-contract-smoke", version: "1.0.0" }, { capabilities: {} });
+    try {
+      await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+      const listed = await client.listTools();
+      expect(listed.tools).toHaveLength(75);
+      for (const name of [
+        "prompt_provenance_inspect", "ai_evidence_inspect", "ai_evidence_validate", "clinical_ai_inspect",
+      ]) {
+        const tool = listed.tools.find((entry) => entry.name === name);
+        expect(tool, `${name} is advertised`).toBeDefined();
+        expect(tool?.inputSchema).toMatchObject({
+          properties: { document_json: { description: expect.any(String) } },
+        });
+        expect(tool?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+      }
+      const clinical = listed.tools.find((entry) => entry.name === "clinical_ai_inspect");
+      expect(clinical?.inputSchema).toMatchObject({
+        properties: { url: { description: expect.any(String) } },
+      });
+      expect(clinical?.annotations?.openWorldHint).toBe(true);
+      for (const name of ["prompt_provenance_inspect", "ai_evidence_inspect", "ai_evidence_validate"]) {
+        expect(listed.tools.find((entry) => entry.name === name)?.annotations?.openWorldHint).toBe(false);
+      }
+
+      const invalidValidation = await client.callTool({
+        name: "ai_evidence_validate", arguments: { document_json: "{" },
+      });
+      expect(invalidValidation.isError).not.toBe(true);
+      const validationText = invalidValidation.content[0];
+      expect(validationText?.type).toBe("text");
+      if (validationText?.type !== "text") throw new Error("expected text validation response");
+      expect(JSON.parse(validationText.text).valid).toBe(false);
+
+      for (const [name, args] of [
+        ["prompt_provenance_inspect", { document_json: "{" }],
+        ["ai_evidence_inspect", { document_json: "{" }],
+        ["clinical_ai_inspect", {}],
+      ] as const) {
+        const result = await client.callTool({ name, arguments: args });
+        expect(result.isError, `${name} rejects invalid input`).toBe(true);
+      }
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("marks failed audit calls and invalid status previews as MCP errors", async () => {
     let sinkHits = 0;
     const sink = createServer((_request, response) => {

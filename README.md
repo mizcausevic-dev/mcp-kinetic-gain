@@ -15,14 +15,14 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `aeo_get_claim` - Extract a single AEO claim by ID
 - `aeo_well_known_url` - Compute the canonical AEO well-known URL for an origin
 - `prompt_provenance_validate` - Validate a Prompt Provenance JSON document against the v0.1
-- `prompt_provenance_inspect` - Structured summary of a Prompt Provenance document: prompt
+- `prompt_provenance_inspect` - Inspect an inline Prompt Provenance JSON document
 - `prompt_provenance_eval_result` - Extract a single evaluation suite's result from a Prompt
 - `agent_card_well_known_url` - Compute the canonical Agent Card well-known URL for a given
 - `agent_card_inspect` - Structured summary of an Agent Card document
 - `agent_card_tool_disclosure` - Return the list of tools an agent declares, with side-effect
 - `agent_card_validate` - Validate an Agent Card JSON document against the v0.1 schema.
-- `ai_evidence_validate` - Validate an AI Evidence object against the v0.1 schema.
-- `ai_evidence_inspect` - Structured summary of an AI Evidence object: claim text
+- `ai_evidence_validate` - Check the structure of an inline AI Evidence JSON document
+- `ai_evidence_inspect` - Inspect an inline AI Evidence JSON document
 - `ai_evidence_verify_hash` - Compute SHA-256 over the canonical UTF-8 form of
 - `tool_card_well_known_url` - Compute the canonical MCP Tool Card well-known URL
 - `tool_card_inspect` - Structured summary of an MCP Tool Card: tool identity, safety
@@ -47,7 +47,7 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `clinical_ai_well_known_url` - Compute the canonical Clinical AI Card well-known URL
 - `clinical_ai_fetch` - Fetch a Clinical AI Card from a URL
 - `clinical_ai_validate` - Validate a Clinical AI Card JSON document against the v0.1
-- `clinical_ai_inspect` - Structured summary of a Clinical AI Card: system identity
+- `clinical_ai_inspect` - Summarize an existing Clinical AI Card, inline or by URL
 - `incident_well_known_url` - Compute the canonical AI Incident Card well-known URL
 - `incident_fetch` - Fetch an AI Incident Card from a URL
 - `incident_validate` - Validate an AI Incident Card JSON document against the v0.1
