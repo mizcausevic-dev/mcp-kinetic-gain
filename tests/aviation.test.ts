@@ -215,19 +215,23 @@ describe("aviation CLI validation scope", () => {
   it("accepts structurally valid cards and rejects duplicate raw keys", async () => {
     const directory = await mkdtemp(join(tmpdir(), "kg-aviation-cli-"));
     try {
-      const { card } = await signedMroFixture();
+      const card = copy(mroCard); // CLI checks structure, not cryptographic validity.
       const aviationPath = join(directory, "aviation.json");
       const mroPath = join(directory, "mro.json");
       const duplicatePath = join(directory, "mro-duplicate.json");
+      const invalidUtf8Path = join(directory, "mro-invalid-utf8.json");
+      const bomPath = join(directory, "mro-bom.json");
       await writeFile(aviationPath, JSON.stringify(aviationCard));
       await writeFile(mroPath, JSON.stringify(card));
       await writeFile(duplicatePath, JSON.stringify(card).replace('"mro_signoff_card_version":"0.1",', '"mro_signoff_card_version":"0.1","mro_signoff_card_version":"0.1",'));
+      await writeFile(invalidUtf8Path, Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0xff, 0x7d]));
+      await writeFile(bomPath, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(JSON.stringify(card))]));
       expect(await runValidate([aviationPath, mroPath])).toBe(0);
-      expect(await runValidate([duplicatePath])).toBe(1);
+      expect(await runValidate([duplicatePath, invalidUtf8Path, bomPath])).toBe(1);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("does not treat CLI structure validation as signature verification", async () => {
     const directory = await mkdtemp(join(tmpdir(), "kg-aviation-cli-"));

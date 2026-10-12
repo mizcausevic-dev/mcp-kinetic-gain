@@ -15,6 +15,7 @@
  * With no subcommand, falls through to MCP stdio server mode.
  */
 import { readFile } from "node:fs/promises";
+import { TextDecoder } from "node:util";
 import { glob } from "tinyglobby";
 import type { ZodTypeAny } from "zod";
 
@@ -115,7 +116,11 @@ async function validateFile(filePath: string): Promise<ValidationResult> {
   let raw: string;
   let doc: unknown;
   try {
-    raw = await readFile(filePath, "utf8");
+    const bytes = await readFile(filePath);
+    if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+      throw new Error("UTF-8 BOM is not accepted");
+    }
+    raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     doc = JSON.parse(raw);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
