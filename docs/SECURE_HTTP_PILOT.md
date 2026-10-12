@@ -180,10 +180,11 @@ The review CI pins the Broker source commit and installs its Python 3.11 host
 dependencies from `docs/broker-host-requirements.lock` with package hashes.
 The Broker wheel is then built from that pinned source without resolving new
 dependencies. The lock was installed and checked in a disposable Windows
-Python 3.11 environment, and the prior review head's Node 20/22 Linux CI
-passed. Final-head CI must pass again after this fix. A local Linux Docker
-image archive has been built and smoke tested without network access, but its
-final source hash and a hosted artifact remain to be verified. A
+Python 3.11 environment, and Node 20/22 Linux CI passed at a prior review
+head. Check CI again at the final PR head. A local Linux Docker image archive
+has been built and smoke tested without network access; regenerate and hash it
+from the final reviewed commit before any host transfer. No hosted artifact has
+been verified. A
 private release still needs package integrity and provenance evidence for the
 actual deployed bytes.
 
