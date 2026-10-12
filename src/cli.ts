@@ -7,7 +7,8 @@
  * zod schema validates it.
  *
  * Subcommands:
- *   validate <paths...>   Validate JSON file(s) or glob(s) against the 12 specs.
+ *   validate <paths...>   Validate JSON file(s) or glob(s) against 12 base
+ *                         specs and 2 optional aviation cards.
  *   --help, -h            Print usage.
  *   --version, -v         Print the package version.
  *
@@ -31,6 +32,8 @@ import {
   studentDisclosureSchema,
   tutorCardSchema,
 } from "./schemas.js";
+import { aviationMlCardSchema, mroSignoffCardSchema } from "./aviation-schemas.js";
+import { canonicalizeJcs, parseCardJson } from "./aviation-json.js";
 
 // Import + re-export PACKAGE_VERSION from the shared single-source-of-truth
 // module so `cli.ts`, `server.ts`, and the test suite all read the same value
@@ -65,6 +68,8 @@ const SPECS: SpecMapping[] = [
   { key: "ai-incident",        versionField: "incident_card_version",    displayName: "AI Incident Card",        schema: aiIncidentCardSchema },
   { key: "decision-card",      versionField: "decision_card_version",    displayName: "AI Procurement Decision Card", schema: decisionCardSchema },
   { key: "claims-card",        versionField: "claims_card_version",      displayName: "AI Claims Decision Card", schema: claimsCardSchema },
+  { key: "aviation-ml-card",   versionField: "aviation_ml_card_version", displayName: "Aviation ML Assurance Card", schema: aviationMlCardSchema },
+  { key: "mro-signoff-card",   versionField: "mro_signoff_card_version", displayName: "MRO AI Sign-off Card", schema: mroSignoffCardSchema },
 ];
 
 function detectSpec(doc: unknown): SpecMapping | null {
@@ -128,6 +133,20 @@ async function validateFile(filePath: string): Promise<ValidationResult> {
     return { file: filePath, status: "unrecognized" };
   }
 
+  // Aviation card signatures need the exact transport JSON checked before
+  // schema validation. JSON.parse alone silently keeps the final duplicate
+  // key, which could give another verifier a different document.
+  if (spec.key === "aviation-ml-card" || spec.key === "mro-signoff-card") {
+    try {
+      doc = parseCardJson(raw);
+      if (spec.key === "mro-signoff-card") canonicalizeJcs(doc);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      annotate("error", `Could not safely parse aviation card: ${message}`, filePath);
+      return { file: filePath, status: "parse-error", spec, parseError: message };
+    }
+  }
+
   const parsed = spec.schema.safeParse(doc);
   if (parsed.success) {
     return { file: filePath, status: "pass", spec };
@@ -171,7 +190,7 @@ function printHelp(): void {
 
 USAGE
   mcp-kinetic-gain                       Run the stdio MCP server (default)
-  mcp-kinetic-gain validate <paths...>   Validate JSON files / globs against the 12 specs
+  mcp-kinetic-gain validate <paths...>   Structurally validate JSON files / globs against 12 base specs and 2 aviation cards
   mcp-kinetic-gain --help                Print this message
   mcp-kinetic-gain --version             Print the package version
 
@@ -179,6 +198,10 @@ EXAMPLES
   mcp-kinetic-gain validate .well-known/ai-entity.json
   mcp-kinetic-gain validate ".well-known/**/*.json"
   mcp-kinetic-gain validate cards/clinical-ai.json cards/incident-*.json
+
+AVIATION NOTE
+  CLI validation checks structure and Suite rules only. It does not verify
+  MRO signatures, staff authority, artifact bytes, or airworthiness.
 
 EXIT CODES
   0   Every matched file passed validation
@@ -190,7 +213,7 @@ The version field on each document selects the spec:
   aeo_version, provenance_version, agent_card_version, evidence_version,
   tool_card_version, tutor_card_version, disclosure_version, aup_version,
   clinical_ai_card_version, incident_card_version, decision_card_version,
-  claims_card_version
+  claims_card_version, aviation_ml_card_version, mro_signoff_card_version
 `);
 }
 

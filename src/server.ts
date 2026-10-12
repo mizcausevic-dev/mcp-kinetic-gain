@@ -2,9 +2,8 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
- * @tool-count 75  - CI-enforced (tests/tool-count.test.ts) to equal
- *   toolDescriptors.length. The ListTools handler returns toolDescriptors
- *   verbatim, so the array is the single source of truth for the count.
+ * @tool-count 75  - CI-enforced (tests/tool-count.test.ts) for the default
+ *   profile. MCP_KG_VERTICALS=aviation adds five opt-in tools to this server.
  *
  * v0.9.0: AI Claims Decision Card (InsurTech) - the 12th Suite spec. 4 new
  *   claims_card_* tools (validate / inspect / sign / chain), 71 -> 75 tools,
@@ -68,6 +67,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { toolDescriptors } from "./tools.js";
+import { aviationToolDescriptors } from "./aviation-tools.js";
+import { aviationHandlers } from "./handlers/aviation.js";
 import { PACKAGE_VERSION } from "./version.js";
 
 import {
@@ -322,19 +323,36 @@ function isStructuredErrorResult(name: string, result: string): boolean {
   }
 }
 
-export function buildServer(): Server {
+/** The aviation vertical is opt-in so existing clients retain 75 listed tools. */
+export function selectToolProfile(verticals: string | undefined = process.env.MCP_KG_VERTICALS) {
+  const requested = verticals?.trim() ?? "";
+  if (requested !== "" && requested !== "aviation") {
+    throw new Error("MCP_KG_VERTICALS must be unset or exactly 'aviation'");
+  }
+  const aviationEnabled = requested === "aviation";
+  return {
+    aviationEnabled,
+    descriptors: aviationEnabled ? [...toolDescriptors, ...aviationToolDescriptors] : toolDescriptors,
+    handlers: aviationEnabled ? { ...handlers, ...aviationHandlers } : handlers,
+  };
+}
+
+export function buildServer(verticals: string | undefined = process.env.MCP_KG_VERTICALS): Server {
+  const profile = selectToolProfile(verticals);
   const server = new Server(
     { name: "mcp-kinetic-gain", version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: toolDescriptors,
+    tools: profile.descriptors,
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    const handler = handlers[name];
+    const handler = Object.prototype.hasOwnProperty.call(profile.handlers, name)
+      ? profile.handlers[name]
+      : undefined;
     if (!handler) {
       return {
         content: [{ type: "text", text: `unknown tool: ${name}` }],
@@ -357,11 +375,13 @@ export function buildServer(): Server {
 }
 
 async function main(): Promise<void> {
-  const server = buildServer();
+  const verticals = process.env.MCP_KG_VERTICALS;
+  const profile = selectToolProfile(verticals);
+  const server = buildServer(verticals);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 12 specs + DefenseTech)\n`,
+    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${profile.descriptors.length} tools across 12 base specs${profile.aviationEnabled ? " + 2 aviation cards" : ""} + DefenseTech)\n`,
   );
 }
 

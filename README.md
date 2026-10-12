@@ -89,6 +89,31 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 </details>
 <!-- END TOOL CATALOG -->
 
+## Optional Aerospace vertical
+
+The source checkout includes five **local, read-only** tools for two aviation
+cards. The default `tools/list` remains the existing 75 tools. Set
+`MCP_KG_VERTICALS=aviation` on the **same** MCP server entry and restart the
+client to list 80 tools. An unknown profile fails startup rather than silently
+changing the tool set. The aviation cards are also recognized by the CLI and
+`suite_doc_detect_spec` without enabling the MCP profile.
+CLI validation checks card structure and Suite rules only; `mro_signoff_verify`
+is the separate cryptographic check and still requires an externally trusted key.
+
+| Tool | Result and limit |
+| --- | --- |
+| `aviation_ml_card_validate` | Structural v0.1 card validation; no airworthiness approval. |
+| `aviation_ml_card_inspect` | Summary of vendor declarations; referenced evidence is not fetched. |
+| `aviation_ml_card_odd_check` | Flags operating conditions with no evidence reference; does not judge dataset coverage. |
+| `aviation_ml_card_dal_check` | Summarizes proposed target DAL and documentation gaps; does not assign or certify a DAL. |
+| `mro_signoff_verify` | Checks a JCS-SHA256-Ed25519 signature against a caller-pinned key and optional independent artifact digest. It does not verify staff identity or authority and cannot authorize return to service. |
+
+For Claude Desktop, add `"env": { "MCP_KG_VERTICALS": "aviation" }` inside the
+existing `kinetic-gain` config entry. These tools take inline `document_json`;
+none fetch a card, evidence URL, dataset, or authority record. Keep real
+maintenance, aircraft, and controlled technical data out of hosted MCP clients
+unless that client's retention and access boundary has been approved.
+
 Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fetch tools. Specs **without** one (Prompt Provenance, AI Evidence - these usually travel inline with answers or in repos, not at fixed paths) get parse tools that take a `document_json` string.
 
 ## Network and data boundaries
