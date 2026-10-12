@@ -3,8 +3,8 @@
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
  * @tool-count 75  - CI-enforced (tests/tool-count.test.ts) to equal
- *   toolDescriptors.length. The ListTools handler returns toolDescriptors
- *   verbatim, so the array is the single source of truth for the count.
+ *   toolDescriptors.length. The default stdio ListTools handler returns
+ *   toolDescriptors verbatim. The opt-in secure HTTP source pilot filters it.
  *
  * v0.9.0: AI Claims Decision Card (InsurTech) - the 12th Suite spec. 4 new
  *   claims_card_* tools (validate / inspect / sign / chain), 71 -> 75 tools,
@@ -66,6 +66,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
 import { toolDescriptors } from "./tools.js";
 import { PACKAGE_VERSION } from "./version.js";
@@ -322,33 +323,62 @@ function isStructuredErrorResult(name: string, result: string): boolean {
   }
 }
 
-export function buildServer(): Server {
+export interface ToolDispatchGate {
+  availableTools(auth: AuthInfo | undefined): Promise<string[]>;
+  invoke(
+    name: string,
+    args: Record<string, unknown>,
+    auth: AuthInfo | undefined,
+    handler: () => Promise<string>,
+  ): Promise<{ text: string; isError?: boolean }>;
+}
+
+export function buildServer(gate?: ToolDispatchGate): Server {
   const server = new Server(
     { name: "mcp-kinetic-gain", version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: toolDescriptors,
-  }));
+  server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+    if (!gate) return { tools: toolDescriptors };
+    try {
+      const names = new Set(await gate.availableTools(extra.authInfo));
+      return { tools: toolDescriptors.filter((tool) => names.has(tool.name)) };
+    } catch {
+      // The governed endpoint never advertises tools if its gate is unavailable.
+      return { tools: [] };
+    }
+  });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
     const handler = handlers[name];
-    if (!handler) {
+    if (!handler && !gate) {
       return {
         content: [{ type: "text", text: `unknown tool: ${name}` }],
         isError: true,
       };
     }
     try {
+      if (gate) {
+        const gated = await gate.invoke(name, args ?? {}, extra.authInfo, () => {
+          if (!handler) throw new Error("unknown tool");
+          return handler(args ?? {});
+        });
+        return {
+          content: [{ type: "text" as const, text: gated.text }],
+          isError: gated.isError ?? isStructuredErrorResult(name, gated.text),
+        };
+      }
+      if (!handler) throw new Error("unknown tool");
       const result = await handler(args ?? {});
       const content = [{ type: "text" as const, text: result }];
       return isStructuredErrorResult(name, result)
         ? { content, isError: true }
         : { content };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // A remote caller must not receive handler, credential, or sink errors.
+      const message = gate ? "tool call failed" : err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: message }], isError: true };
     }
   });
