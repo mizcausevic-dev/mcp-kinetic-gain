@@ -12,6 +12,10 @@ import {
   checkBrokerDecision, validateBrokerBridgeConfig,
   type BrokerBridgeConfig, type BrokerDecision,
 } from "./broker-bridge.js";
+import {
+  gcsRevocationReader, revoked,
+  type RevocationDocument, type RevocationReader,
+} from "./external-revocation.js";
 
 const SOURCE = "mcp-kinetic-gain";
 const PILOT_TOOL = "suite_doc_detect_spec";
@@ -33,6 +37,7 @@ export interface SecureGateConfig extends BrokerBridgeConfig {
   policyFile: string;
   auditUrl: string;
   auditToken: string;
+  externalRevocation?: RevocationReader;
 }
 
 interface Principal {
@@ -217,7 +222,21 @@ async function boundedResponse(response: Response): Promise<JsonRecord> {
 }
 
 export class SecurePilotGate implements ToolDispatchGate {
+  private highestExternalRevision = 0;
   constructor(private readonly config: SecureGateConfig) {}
+
+  private async readExternalRevocation(
+    principal: Principal, decisionId?: string,
+  ): Promise<RevocationDocument | undefined> {
+    if (!this.config.externalRevocation) return undefined;
+    const document = await this.config.externalRevocation.read();
+    if (document.revision < this.highestExternalRevision ||
+        revoked(document, principal, decisionId)) {
+      throw new Error("external revocation denied");
+    }
+    this.highestExternalRevision = document.revision;
+    return document;
+  }
 
   private async event(kind: string, payload: JsonRecord): Promise<AuditReceipt> {
     const controller = new AbortController();
@@ -251,8 +270,16 @@ export class SecurePilotGate implements ToolDispatchGate {
     const principal = principalFromAuth(auth, this.config);
     const policy = await readGatePolicy(this.config.policyFile);
     if (!permitted(principal, policy, PILOT_TOOL)) return [];
-    const decision = await checkBrokerDecision(this.config, principal, PILOT_TOOL);
-    return decision.outcome === "allow" ? [PILOT_TOOL] : [];
+    try {
+      const external = await this.readExternalRevocation(principal);
+      const decision = await checkBrokerDecision(this.config, principal, PILOT_TOOL);
+      if (decision.outcome !== "allow") return [];
+      if (external && revoked(external, principal, decision.signedCardDecisionId)) return [];
+      await this.readExternalRevocation(principal, decision.signedCardDecisionId);
+      return [PILOT_TOOL];
+    } catch {
+      return [];
+    }
   }
 
   async invoke(
@@ -270,15 +297,23 @@ export class SecurePilotGate implements ToolDispatchGate {
     const correlationId = randomUUID();
     const basis = { correlation_id: correlationId, tool_name: name, client_id: principal.clientId };
     let allowed = false;
+    let denialReason = "gate_denied";
+    let firstExternal: RevocationDocument | undefined;
     try {
       allowed = name === PILOT_TOOL && validPilotArgs(args) &&
         permitted(principal, await readGatePolicy(this.config.policyFile), name);
+      if (allowed && this.config.externalRevocation) {
+        denialReason = "external_revocation_unavailable_or_denied";
+        firstExternal = await this.readExternalRevocation(principal);
+      }
     } catch {
-      // An unreadable or malformed source-owned policy file fails closed.
+      // Any unreadable gate input, including the external withdrawal source,
+      // must clear a prior local allow before Broker or audit can see it.
+      allowed = false;
     }
     if (!allowed) {
       try {
-        await this.event("tool_invocation_denied", { ...basis, reason: "gate_denied" });
+        await this.event("tool_invocation_denied", { ...basis, reason: denialReason });
       } catch {
         // The call is still denied. The missing denial event is a documented gap.
       }
@@ -304,11 +339,19 @@ export class SecurePilotGate implements ToolDispatchGate {
       }
       return { text: "tool_not_permitted", isError: true };
     }
+    if (firstExternal && revoked(firstExternal, principal, brokerDecision.signedCardDecisionId)) {
+      try {
+        await this.event("tool_invocation_denied", { ...basis, reason: "external_revocation" });
+      } catch {
+        // Revocation still blocks the handler when denial logging fails.
+      }
+      return { text: "tool_not_permitted", isError: true };
+    }
 
     let decision: AuditReceipt;
     try {
       decision = await this.event("tool_invocation_allowed", {
-        ...basis, gate_config_version: 1,
+        ...basis, gate_config_version: 1, decision_phase: "pre_dispatch",
         broker_correlation_id: brokerDecision.brokerCorrelationId,
         broker_state_sha256: brokerDecision.stateSha256,
         signed_card_decision_id: brokerDecision.signedCardDecisionId,
@@ -349,6 +392,16 @@ export class SecurePilotGate implements ToolDispatchGate {
         await this.event("tool_invocation_denied", { ...basis, reason: "broker_changed_after_receipt" });
       } catch {
         // No handler executes even if the denial event is unavailable.
+      }
+      return { text: "tool_not_permitted", isError: true };
+    }
+    try {
+      await this.readExternalRevocation(principal, freshBrokerDecision.signedCardDecisionId);
+    } catch {
+      try {
+        await this.event("tool_invocation_denied", { ...basis, reason: "external_revocation_after_receipt" });
+      } catch {
+        // An unavailable withdrawal source cannot authorize the handler.
       }
       return { text: "tool_not_permitted", isError: true };
     }
@@ -397,6 +450,10 @@ export async function loadSecureGateConfig(input: {
   auditToken: string;
   pythonFile: string;
   configFile: string;
+  revocationBucket?: string;
+  revocationObject?: string;
+  revocationReader?: RevocationReader;
+  requireExternalRevocation?: boolean;
 }): Promise<SecureGateConfig> {
   let validAuditUrl = false;
   try {
@@ -414,11 +471,22 @@ export async function loadSecureGateConfig(input: {
       !/^[!-~]{32,256}$/.test(input.auditToken)) {
     throw new Error("invalid secure pilot configuration");
   }
+  if (Boolean(input.revocationBucket) !== Boolean(input.revocationObject) ||
+      (input.revocationReader && input.revocationBucket) ||
+      (input.requireExternalRevocation && !input.revocationReader && !input.revocationBucket)) {
+    throw new Error("external revocation source required");
+  }
+  const externalRevocation = input.revocationReader ?? (
+    input.revocationBucket && input.revocationObject
+      ? gcsRevocationReader({ bucket: input.revocationBucket, object: input.revocationObject })
+      : undefined
+  );
   const publicKey = createPublicKey(await readFile(input.publicKeyFile));
   if (publicKey.asymmetricKeyType !== "ed25519") throw new Error("secure pilot requires Ed25519 public key");
   await readGatePolicy(input.policyFile);
   await validateBrokerBridgeConfig(input);
+  if (input.requireExternalRevocation) await externalRevocation?.read();
   return { issuer: input.issuer, resource: input.resource, publicKey,
     policyFile: input.policyFile, auditUrl: input.auditUrl, auditToken: input.auditToken,
-    pythonFile: input.pythonFile, configFile: input.configFile };
+    pythonFile: input.pythonFile, configFile: input.configFile, externalRevocation };
 }

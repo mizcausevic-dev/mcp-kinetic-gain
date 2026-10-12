@@ -59,7 +59,9 @@ jobs:
       - name: Install pinned Broker bridge for verification
         run: |
           python -m venv broker/.venv
-          broker/.venv/bin/python -m pip install -e './broker[host]'
+          broker/.venv/bin/python -m pip install --require-hashes --only-binary=:all: -r docs/broker-host-requirements.lock
+          broker/.venv/bin/python -m pip install --no-deps --no-build-isolation ./broker
+          broker/.venv/bin/python -m pip check
 
       - name: Verify tag, package, and Registry manifest versions
         run: |

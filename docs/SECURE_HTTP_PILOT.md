@@ -6,8 +6,12 @@ this document as evidence of deployed enforcement.
 
 ## Surface and start contract
 
-After `npm ci` and `npm run build`, run `node dist/secure-http.js` from this
-checkout with these environment variables:
+The `node dist/secure-http.js` CLI is a proposed GCE-only entry point. It
+requires an external Cloud Storage withdrawal record at startup, including a
+working VM metadata server. It cannot start as an ordinary local checkout.
+Local synthetic tests instead use the programmatic `startSecurePilot` API with
+an injected revocation reader. After `npm ci` and `npm run build`, the proposed
+GCE host would use these environment variables:
 
 | Variable | Required value |
 | --- | --- |
@@ -19,6 +23,8 @@ checkout with these environment variables:
 | `AUDIT_STREAM_TOKEN` | Dedicated 32–256 character scoped producer token bound by the Sink to source `mcp-kinetic-gain`. Never use a reader token. |
 | `MCP_BROKER_PYTHON` | Absolute path to the installed Python Broker interpreter. The host invokes `-I -m mcp_permission_broker.runtime_bridge`. |
 | `MCP_BROKER_CONFIG_FILE` | Absolute path to the operator-owned, short-lived Broker snapshot. Python validates its signed card, buyer key, identity and tool mappings, condition facts, and revocations. |
+| `MCP_REVOCATION_GCS_BUCKET` | Required bucket name for the external synthetic withdrawal record. |
+| `MCP_REVOCATION_GCS_OBJECT` | Required object name, such as `revocations/current.json`. |
 
 The MCP endpoint is `http://127.0.0.1:<MCP_SECURE_PORT>/mcp`. The test issuer
 must sign an EdDSA JWT with only these claims: `iss`, exact single-string `aud`
@@ -54,6 +60,47 @@ its operating-system ACL; the source pilot cannot enforce those external file
 management practices. This is local revocation, not durable identity-provider
 withdrawal. There is still a race between the last file read and handler start.
 
+For the proposed GCP drill, the required CLI external source reads the exact Cloud
+Storage object over Google's JSON API on each selected discovery/call. It gets
+a downscoped read-only access token from the VM metadata server, accepts no
+caller-supplied URL, follows no redirects, and sends no upstream MCP bearer to
+Google. The runtime identity must have object read permission on only the
+approved revocation bucket and no write permission. Configure
+both GCS location variables for the `node dist/secure-http.js` entry point;
+the CLI blocks startup if either is absent or the initial read fails.
+The VM must have the Cloud Storage read-only OAuth access scope compatible
+with the downscoped metadata request, plus object read IAM on the specific
+bucket. A different VM scope configuration requires its own live preflight.
+Tests can pass an in-memory reader to the programmatic pilot API. The record
+has this schema:
+
+```json
+{
+  "version": 1,
+  "revision": 1,
+  "valid_until": 0,
+  "revoked_jtis": [],
+  "revoked_subjects": [],
+  "revoked_client_ids": [],
+  "revoked_decision_ids": []
+}
+```
+
+`valid_until` above is deliberately expired; a live record must expire within
+120 seconds and be refreshed by a separately authorized writer. The reader
+rejects missing, stale, malformed, oversized, or inaccessible records. It
+checks once before the Broker and again after the accepted pre-dispatch audit
+receipt; it also checks the Broker's signed card decision ID. A lower revision
+than one already seen by the process is denied. Restoring older VM policy and
+Broker files cannot clear a withdrawal held in the external object. This
+depends on separate write custody and IAM, which have not been configured or
+verified. The revocation writer must update this mutable object and is separate
+from the checkpoint's append-only uploader. A compromised writer could roll
+the object back; the in-process revision high-water mark is lost on VM rollback,
+and a still-valid older record may be replayed for up to 120 seconds. This adapter does
+not prove buyer authorization or instantaneous revocation during a running
+handler.
+
 ## Enforced MCP path
 
 All HTTP requests must have the exact loopback Host and no Origin. GET and
@@ -78,10 +125,10 @@ snapshot digest. This source integration is not proof of a real buyer mandate
 or current condition facts. At most four Broker child checks can run at once;
 excess checks fail closed. This cap is not a per-client rate limiter.
 
-Before invoking the selected pure handler, the host POSTs a
+Before invoking the selected pure handler, the host POSTs a provisional
 `tool_invocation_allowed` event to the scoped Audit Sink. Its payload contains
 only `correlation_id`, `tool_name`, signed `client_id`,
-`gate_config_version: 1`, the Broker check correlation ID, the signed card's
+`gate_config_version: 1`, `decision_phase: "pre_dispatch"`, the Broker check correlation ID, the signed card's
 decision ID, and the snapshot digest. It omits input content, token, subject,
 and result. The host requires HTTP 201 and exact source, kind, and payload
 equality plus a positive event ID and 64-character hash in the returned receipt. Missing,
@@ -96,8 +143,11 @@ run, a failed outcome write cannot undo it. Only one deterministic,
 nonnetwork, nonmutating tool is available for this reason. An authenticated
 denial attempts `tool_invocation_denied`; a Sink outage can leave that denial
 unrecorded. Pre-auth HTTP rejections are not sent to the Sink. A required
-pre-dispatch receipt can also remain unmatched if the Sink fails later.
-Reconcile unmatched receipts before treating this as a complete ledger.
+pre-dispatch receipt can also remain unmatched if the external withdrawal
+source and denial write fail after acceptance. An unmatched allowed event
+means **unknown execution status**, never proof that the handler ran. Only a
+linked completion event supports an execution claim. Reconcile unmatched
+receipts and drill the outage path before treating this as a complete ledger.
 
 The Sink's 201 response is evidence that the configured Sink accepted an event
 through this local connection. It is not proof of independent checkpoint
@@ -110,20 +160,24 @@ legacy shared-token mode is outside this pilot's tested contract.
 The published stdio command remains an ungated 75-tool local preview. This
 source HTTP process calls the Python Broker for a signed-card decision, but its
 operator snapshot alone cannot establish a real issuer, buyer mandate, tenant
-membership, vendor binding, or observed condition facts. Revocation in that
-snapshot is not rollback-resistant: an older still-valid snapshot can restore
-an approval after restart, and an identical-byte rollback between the two
-checks is indistinguishable from no change. There is also a small race between
-the second Broker check and the handler start. Do not claim immediate or
-durable revocation from this path. Do not proxy it to a public endpoint or
+membership, vendor binding, or observed condition facts. Without the opt-in
+external source, an older still-valid snapshot can restore an approval after
+restart. The GCP adapter is locally tested with synthetic records; no hosted
+read, IAM separation, outage, or rollback was verified. There is also a small
+race between the last external read and the handler start. Do not claim immediate
+or buyer-governed revocation from this path. Do not proxy it to a public endpoint or
 claim a governed 75-tool runtime. A later private pilot
 needs an exclusive route, independently verified issuer and fact provenance,
 durable revocation, complete outcomes, independent audit checkpoint custody,
 and hosted outage, restore, and rollback drills. The separate Broker package
 must be installed in the exact Python environment; npm does not bundle it.
-The review CI pins the Broker source commit, but its Python transitive
-dependencies are not locked by hashes. A production release needs a reviewed,
-reproducible Python dependency set and package integrity verification.
+The review CI pins the Broker source commit and installs its Python 3.11 host
+dependencies from `docs/broker-host-requirements.lock` with package hashes.
+The Broker wheel is then built from that pinned source without resolving new
+dependencies. The lock was installed and checked in a disposable Windows
+Python 3.11 environment; Linux CI and a hosted artifact remain to be verified
+at the final reviewed commit. A private release still needs package integrity
+and provenance evidence for the actual deployed bytes.
 
 To roll back this unshipped source pilot, stop `node dist/secure-http.js` and
 revert its review branch. It has no production state or public package to

@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startSecurePilot, type RunningSecurePilot } from "../src/secure-http.js";
 import { SecurePilotGate, loadSecureGateConfig, verifyBearerToken } from "../src/secure-gate.js";
 import { checkBrokerDecision } from "../src/broker-bridge.js";
+import type { RevocationDocument, RevocationReader } from "../src/external-revocation.js";
 
 const SINK_TOKEN = "S".repeat(40);
 const ISSUER = "synthetic-issuer";
@@ -28,7 +29,7 @@ const execFileAsync = promisify(execFile);
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
-type SinkMode = "normal" | "outage" | "outcome-outage" | "bad-receipt" | "tampered-link" | "revoke-after-allow" | "expire-after-allow" | "broker-revoke-after-allow" | "broker-condition-after-allow" | "broker-rollback-after-allow";
+type SinkMode = "normal" | "outage" | "outcome-outage" | "bad-receipt" | "tampered-link" | "revoke-after-allow" | "expire-after-allow" | "broker-revoke-after-allow" | "broker-condition-after-allow" | "broker-rollback-after-allow" | "external-revoke-after-allow" | "external-outage-after-allow";
 
 describe("loopback Streamable HTTP source pilot", () => {
   let directory: string;
@@ -41,6 +42,15 @@ describe("loopback Streamable HTTP source pilot", () => {
   let pilot: RunningSecurePilot;
   let mode: SinkMode;
   let events: Array<Record<string, any>>;
+  let externalDocument: RevocationDocument;
+  let externalOutage: boolean;
+
+  const externalReader: RevocationReader = {
+    async read() {
+      if (externalOutage) throw new Error("synthetic revocation outage");
+      return externalDocument;
+    },
+  };
 
   async function writePolicy(
     revokedJtis: string[] = [],
@@ -153,6 +163,11 @@ describe("loopback Streamable HTTP source pilot", () => {
     await writeBrokerFixture();
     events = [];
     mode = "normal";
+    externalOutage = false;
+    externalDocument = {
+      revision: 1, revokedJtis: new Set(), revokedSubjects: new Set(),
+      revokedClientIds: new Set(), revokedDecisionIds: new Set(),
+    };
     sink = createServer(async (request, response) => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
@@ -160,7 +175,8 @@ describe("loopback Streamable HTTP source pilot", () => {
         response.writeHead(401).end();
         return;
       }
-      if (mode === "outage" || (mode === "outcome-outage" && events.length >= 1)) {
+      if (mode === "outage" ||
+          ((mode === "outcome-outage" || mode === "external-outage-after-allow") && events.length >= 1)) {
         response.writeHead(503).end("TOP_SECRET_SINK_BODY");
         return;
       }
@@ -184,6 +200,10 @@ describe("loopback Streamable HTTP source pilot", () => {
           await writeFile(temporary, earlierSnapshot);
           await rename(temporary, brokerConfigFile);
         }
+        if (mode === "external-revoke-after-allow") {
+          externalDocument = { ...externalDocument, revision: 2, revokedJtis: new Set(["jti-1"]) };
+        }
+        if (mode === "external-outage-after-allow") externalOutage = true;
       }
       const receipt = {
         ...event,
@@ -229,6 +249,7 @@ describe("loopback Streamable HTTP source pilot", () => {
       ]);
       expect(events[0]?.source).toBe("mcp-kinetic-gain");
       expect(events[0]?.payload.client_id).toBe(CLIENT);
+      expect(events[0]?.payload.decision_phase).toBe("pre_dispatch");
       expect(events[0]?.payload.broker_correlation_id).toMatch(/^[0-9a-f-]{36}$/);
       expect(events[0]?.payload.broker_state_sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(events[0]?.payload.signed_card_decision_id).toBe("SYNTHETIC-BRIDGE-001");
@@ -407,6 +428,101 @@ describe("loopback Streamable HTTP source pilot", () => {
     // for durable withdrawal semantics.
     expect(result).toEqual({ text: "handler-ran", isError: false });
     expect(invoked).toBe(1);
+  });
+
+  it("keeps an external withdrawal effective after restoring older local policy and Broker bytes", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+      revocationReader: externalReader, requireExternalRevocation: true,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    const olderPolicy = await readFile(policyFile);
+    const olderBroker = await readFile(brokerConfigFile);
+    let invoked = 0;
+    const call = () => gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+    expect((await call()).isError).toBe(false);
+    externalDocument = { ...externalDocument, revision: 2, revokedJtis: new Set(["jti-1"]) };
+    await writePolicy(["jti-1"]);
+    await updateBrokerSnapshot((snapshot) => { snapshot.revoked_jtis = ["jti-1"]; });
+    await writeFile(policyFile, olderPolicy);
+    await writeFile(brokerConfigFile, olderBroker);
+    expect(await call()).toEqual({ text: "tool_not_permitted", isError: true });
+    expect(invoked).toBe(1);
+  });
+
+  it("denies an unavailable external withdrawal source and a withdrawal after audit acceptance", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+      revocationReader: externalReader, requireExternalRevocation: true,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    const call = () => gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+    externalOutage = true;
+    // If the external read fails before Broker, neither a Broker child nor an
+    // allow receipt is permissible. A missing executable makes a Broker call
+    // observable as broker_unavailable instead of the gate denial.
+    const originalPythonFile = config.pythonFile;
+    config.pythonFile = join(directory, "missing-broker-python");
+    expect(await call()).toEqual({ text: "tool_not_permitted", isError: true });
+    expect(events.map((event) => [event.kind, event.payload.reason])).toEqual([
+      ["tool_invocation_denied", "external_revocation_unavailable_or_denied"],
+    ]);
+    config.pythonFile = originalPythonFile;
+    externalOutage = false;
+    mode = "external-revoke-after-allow";
+    expect(await call()).toEqual({ text: "tool_not_permitted", isError: true });
+    expect(invoked).toBe(0);
+    expect(events.filter((event) => event.kind === "tool_invocation_allowed")).toHaveLength(1);
+  });
+
+  it("never treats an unmatched pre-dispatch receipt as proof of handler execution", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+      revocationReader: externalReader, requireExternalRevocation: true,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    let invoked = 0;
+    mode = "external-outage-after-allow";
+    const result = await gate.invoke(TOOL, { body: {} }, auth, async () => {
+      invoked += 1;
+      return "handler-ran";
+    });
+    expect(result).toEqual({ text: "tool_not_permitted", isError: true });
+    expect(invoked).toBe(0);
+    expect(events.map((event) => event.kind)).toEqual(["tool_invocation_allowed"]);
+    expect(events[0]?.payload.decision_phase).toBe("pre_dispatch");
+  });
+
+  it("refuses hosted startup without a configured external withdrawal source", async () => {
+    await expect(loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+      requireExternalRevocation: true,
+    })).rejects.toThrow("external revocation source required");
+    externalOutage = true;
+    await expect(loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+      revocationReader: externalReader, requireExternalRevocation: true,
+    })).rejects.toThrow("synthetic revocation outage");
   });
 
   it("caps concurrent Broker children before spawning a fifth check", async () => {

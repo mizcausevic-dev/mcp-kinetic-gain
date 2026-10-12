@@ -11,6 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 import { buildServer } from "./server.js";
 import { loadSecureGateConfig, SecurePilotGate, verifyBearerToken, type SecureGateConfig } from "./secure-gate.js";
+import type { RevocationReader } from "./external-revocation.js";
 
 const HOST = "127.0.0.1";
 const MAX_REQUEST_BYTES = 32_768;
@@ -24,6 +25,10 @@ export interface SecurePilotOptions {
   auditToken: string;
   pythonFile: string;
   configFile: string;
+  revocationBucket?: string;
+  revocationObject?: string;
+  revocationReader?: RevocationReader;
+  requireExternalRevocation?: boolean;
 }
 
 export interface RunningSecurePilot {
@@ -156,6 +161,11 @@ if (isEntryPoint) {
     auditToken: process.env.AUDIT_STREAM_TOKEN ?? "",
     pythonFile: process.env.MCP_BROKER_PYTHON ?? "",
     configFile: process.env.MCP_BROKER_CONFIG_FILE ?? "",
+    revocationBucket: process.env.MCP_REVOCATION_GCS_BUCKET,
+    revocationObject: process.env.MCP_REVOCATION_GCS_OBJECT,
+    // The CLI is the only proposed hosted entry point. Never allow it to
+    // start with only VM-local revocations, even if an env var is omitted.
+    requireExternalRevocation: true,
   };
   startSecurePilot(options).then(({ url }) => {
     process.stderr.write(`mcp-kinetic-gain source pilot listening on ${url}\n`);
