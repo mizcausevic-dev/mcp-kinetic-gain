@@ -10,6 +10,13 @@ describe("aviation strict JSON and JCS", () => {
   it("uses ECMAScript JSON number serialization", () => {
     expect(canonicalizeJcs(JSON.parse('{"n":[4.50,2e-3,1E30]}')))
       .toBe('{"n":[4.5,0.002,1e+30]}');
+    expect(canonicalizeJcs(parseCardJson('{"n":1e30}'))).toBe('{"n":1e+30}');
+  });
+
+  it("rejects unsafe literal integers, numeric overflow, and underflow", () => {
+    expect(() => parseCardJson('{"n":9007199254740993}')).toThrow(/I-JSON range/);
+    expect(() => parseCardJson('{"n":1e400}')).toThrow(/I-JSON range/);
+    expect(() => parseCardJson('{"n":1e-400}')).toThrow(/I-JSON range/);
   });
 
   it("rejects duplicate keys at any depth, including escaped spellings", () => {
@@ -24,6 +31,7 @@ describe("aviation strict JSON and JCS", () => {
     expect(() => parseCardJson(JSON.stringify({ value: "x".repeat(1_000_000) }))).toThrow(/exceeds/);
     expect(() => parseCardJson(`${"[".repeat(65)}0${"]".repeat(65)}`)).toThrow(/too deep/);
     expect(() => canonicalizeJcs("\ud800")).toThrow(/unpaired surrogate/);
+    expect(() => parseCardJson('{"a":"\\ud800"}')).toThrow(/unpaired surrogate/);
     expect(() => canonicalizeJcs(Number.NaN)).toThrow(/non-finite/);
   });
 });

@@ -180,6 +180,10 @@ describe("MRO sign-off signature boundary", () => {
     const wrongId = JSON.parse(await handleMroSignoffVerify({ ...base, expected_key_id: "another-key", document_json: JSON.stringify(card) }));
     expect(wrongId).toMatchObject({ key_id_matches_expected: false, signature_valid_for_supplied_key: false });
 
+    const wrongPublicKey = Buffer.from(await getPublicKeyAsync(new Uint8Array(32).fill(8))).toString("base64url");
+    const wrongKey = JSON.parse(await handleMroSignoffVerify({ ...base, public_key_b64url: wrongPublicKey, document_json: JSON.stringify(card) }));
+    expect(wrongKey.signature_valid_for_supplied_key).toBe(false);
+
     const wrongArtifact = JSON.parse(await handleMroSignoffVerify({ ...base, independent_artifact_sha256: "0".repeat(64), document_json: JSON.stringify(card) }));
     expect(wrongArtifact).toMatchObject({ signature_valid_for_supplied_key: true, artifact_digest_matches_supplied: false, result: "invalid" });
 
@@ -194,6 +198,16 @@ describe("MRO sign-off signature boundary", () => {
     const override = copy(mroCard);
     override.human_review.decision = "override";
     expect(mroSignoffCardSchema.safeParse(override).success).toBe(false);
+  });
+
+  it("rejects raw duplicate keys and unsafe integer literals before MRO signature checking", async () => {
+    const { card, publicKeyB64url } = await signedMroFixture();
+    const base = { expected_key_id: card.signature.key_id, public_key_b64url: publicKeyB64url };
+    const serialized = JSON.stringify(card);
+    const duplicate = serialized.replace('"mro_signoff_card_version":"0.1",', '"mro_signoff_card_version":"0.1","mro_signoff_card_version":"0.1",');
+    await expect(handleMroSignoffVerify({ ...base, document_json: duplicate })).rejects.toThrow(/duplicate object key/);
+    const unsafe = serialized.replace('"confidence":0.71', '"confidence":9007199254740993');
+    await expect(handleMroSignoffVerify({ ...base, document_json: unsafe })).rejects.toThrow(/I-JSON range/);
   });
 });
 

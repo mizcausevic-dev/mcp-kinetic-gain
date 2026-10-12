@@ -30,7 +30,9 @@ export function parseCardJson(raw: unknown): unknown {
       if (current === "\\") {
         pos++; // Skip the escaped character; JSON.parse validated its syntax.
       } else if (current === '"') {
-        return JSON.parse(raw.slice(start, pos)) as string;
+        const decoded = JSON.parse(raw.slice(start, pos)) as string;
+        assertValidUnicode(decoded);
+        return decoded;
       }
     }
     throw new Error("unterminated JSON string");
@@ -72,7 +74,21 @@ export function parseCardJson(raw: unknown): unknown {
       }
     }
     if (current === '"') { string(); return; }
+    const start = pos;
     while (pos < raw.length && !/[ \t\r\n,}\]]/.test(raw[pos]!)) pos++;
+    if (current === "-" || (current !== undefined && /[0-9]/.test(current))) {
+      const token = raw.slice(start, pos);
+      const number = Number(token);
+      // JCS uses I-JSON numbers. Literal integers must be within the exact
+      // interchange range; finite exponent notation such as 1e30 remains a
+      // valid floating-point value under RFC 8785.
+      const mantissa = token.replace(/[eE][+-]?\d+$/, "");
+      if (!Number.isFinite(number) ||
+          (!/[.eE]/.test(token) && !Number.isSafeInteger(number)) ||
+          (number === 0 && /[1-9]/.test(mantissa))) {
+        throw new Error("document_json contains a number outside the supported I-JSON range");
+      }
+    }
   };
 
   value(0);
