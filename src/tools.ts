@@ -82,7 +82,7 @@ export const toolDescriptors = [
   },
   {
     name: "prompt_provenance_inspect",
-    description: "Inspect an inline Prompt Provenance JSON document. Returns JSON text with prompt identity, declared lineage and approval state, evaluation suites, and authorship. Read-only and offline; malformed or schema-invalid input is an MCP tool error. Use prompt_provenance_validate for a pass/fail result or prompt_provenance_eval_result for one suite.",
+    description: "Inspect an inline Prompt Provenance JSON document. Returns JSON text with prompt identity, declared lineage and approval state, evaluation suites, and authorship. Read-only; this call does not fetch external sources. Malformed or schema-invalid input is an MCP tool error. Use prompt_provenance_validate for a pass/fail result or prompt_provenance_eval_result for one suite.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: "object",
@@ -161,7 +161,7 @@ export const toolDescriptors = [
   // --------------------------------------------------------------------------
   {
     name: "ai_evidence_validate",
-    description: "Check the structure of an inline AI Evidence JSON document. Returns JSON text {valid:true,evidence_id,synthesis_role} or {valid:false,reason} using the bundled schema; invalid input is a validation result. Read-only and offline. Does not fetch sources or verify hashes, signatures, or claim truth; use ai_evidence_verify_hash to compare candidate text with the declared hash.",
+    description: "Check the structure of an inline AI Evidence JSON document. Returns JSON text {valid:true,evidence_id,synthesis_role} or {valid:false,reason} using the bundled schema; invalid input is a validation result. Read-only; this call does not fetch sources or verify hashes, signatures, or claim truth. Use ai_evidence_verify_hash to compare candidate text with the declared hash.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: "object",
@@ -172,7 +172,7 @@ export const toolDescriptors = [
   },
   {
     name: "ai_evidence_inspect",
-    description: "Inspect an inline AI Evidence JSON document. Returns JSON text with claim, source and retrieval fields, synthesis role, declared content hash, and signature-field presence. Read-only and offline; malformed or schema-invalid input is an MCP tool error. Does not verify source, hash, signature, or claim truth; use ai_evidence_validate for structure or ai_evidence_verify_hash for candidate text.",
+    description: "Inspect an inline AI Evidence JSON document. Returns JSON text with claim, source and retrieval fields, synthesis role, declared content hash, and signature-field presence. Read-only; this call does not fetch sources. Malformed or schema-invalid input is an MCP tool error. It does not verify source, hash, signature, or claim truth; use ai_evidence_validate for structure or ai_evidence_verify_hash for candidate text.",
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: "object",

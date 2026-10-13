@@ -118,6 +118,8 @@ Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fe
 
 ## Network and data boundaries
 
+Inline parsing tools make no outbound fetch from this server, but the MCP client, transport, and host still handle their input. [Glama's Gateway records full JSON-RPC payloads](https://glama.ai/mcp/faq), including tool arguments and results. Use synthetic data for Glama-hosted checks unless that logging and access boundary is approved for the data.
+
 In the default stdio preview, URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. The optional live audit tools require both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` in the MCP server's environment. The token must match the audit-stream service's bearer token and have at least 32 visible ASCII characters. Use HTTPS for a remote service; HTTP is accepted only for loopback development. Missing or invalid configuration returns an error without sending a request. The stdio `audit_event_emit` tool sends `kind`, caller-asserted `source`, and `payload` to the configured service and validates its event receipt. The receipt does not prove durable storage or event completeness. Its shared token authenticates this MCP process, not the source label or tenant. Approve the write before calling it; omit secrets and personal data unless the service is approved for them. Hash-chain verification checks continuity only; it does not prove audit completeness.
 
 ### Unreleased loopback source pilot
