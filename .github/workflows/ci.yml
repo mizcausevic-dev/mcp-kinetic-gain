@@ -46,3 +46,7 @@ jobs:
           MCP_BROKER_REPO: ${{ github.workspace }}/broker
           MCP_BROKER_PYTHON: ${{ github.workspace }}/broker/.venv/bin/python
       - run: npm run build
+      - name: Verify package boundary
+        run: |
+          npm pack --dry-run --json --ignore-scripts > pack.json
+          node scripts/check-package-files.mjs pack.json

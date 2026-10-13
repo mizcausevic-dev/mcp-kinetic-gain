@@ -7,3 +7,4 @@ coverage/
 
 # CycloneDX SBOM generated at publish time, attached to GH Release
 sbom/
+pack.json

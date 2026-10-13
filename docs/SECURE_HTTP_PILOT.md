@@ -1,8 +1,8 @@
 # Loopback MCP interception source pilot
 
-Status: unreleased review candidate. The current npm and MCP Registry package is
-`mcp-kinetic-gain@0.10.0`; it does not contain this source pilot. Do not use
-this document as evidence of deployed enforcement.
+Status: unreleased source-only review candidate. The npm package excludes this
+pilot's modules and contract document. Do not use this document as evidence of
+deployed enforcement.
 
 ## Surface and start contract
 
