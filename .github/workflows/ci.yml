@@ -50,3 +50,10 @@ jobs:
         run: |
           npm pack --dry-run --json --ignore-scripts > pack.json
           node scripts/check-package-files.mjs pack.json
+      - name: Smoke the installed package over stdio
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-packed"
+          npm pack --json --ignore-scripts --pack-destination "$RUNNER_TEMP/mcp-packed" > "$RUNNER_TEMP/mcp-packed/pack.json"
+          node scripts/check-package-files.mjs "$RUNNER_TEMP/mcp-packed/pack.json"
+          npm install --prefix "$RUNNER_TEMP/mcp-packed/install" --omit=dev --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/mcp-packed"/mcp-kinetic-gain-*.tgz
+          node scripts/smoke-packed-mcp.mjs "$RUNNER_TEMP/mcp-packed/install/node_modules/mcp-kinetic-gain/dist/server.js"

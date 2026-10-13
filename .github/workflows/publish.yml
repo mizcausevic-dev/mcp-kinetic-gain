@@ -110,6 +110,12 @@ jobs:
           cp sbom/cyclonedx.json release/cyclonedx.json
           (cd release && sha256sum ./*.tgz > package.sha256 && sha256sum cyclonedx.json > sbom.sha256)
 
+      - name: Smoke the exact release tarball over stdio
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          npm install --prefix "$RUNNER_TEMP/mcp-release-smoke" --omit=dev --ignore-scripts --no-audit --no-fund "./release/mcp-kinetic-gain-${version}.tgz"
+          node scripts/smoke-packed-mcp.mjs "$RUNNER_TEMP/mcp-release-smoke/node_modules/mcp-kinetic-gain/dist/server.js"
+
       - name: Upload verified release materials
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
