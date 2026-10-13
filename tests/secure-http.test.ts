@@ -770,6 +770,41 @@ describe("loopback Streamable HTTP source pilot", () => {
     ]);
   });
 
+  it("rejects duplicate local policy keys before advertising or invoking a tool", async () => {
+    const config = await loadSecureGateConfig({
+      issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,
+      auditUrl: sinkUrl, auditToken: SINK_TOKEN,
+      pythonFile: BROKER_PYTHON, configFile: brokerConfigFile,
+    });
+    const gate = new SecurePilotGate(config);
+    const auth = verifyBearerToken(token(), config);
+    const validUntil = Math.floor(Date.now() / 1000) + 120;
+    const clients = JSON.stringify({
+      [CLIENT]: { subject: SUBJECT, allowed_tools: [TOOL] },
+    });
+    const duplicatePolicies = [
+      `{"version":1,"valid_until":${validUntil},"clients":${clients},"revoked_jtis":["jti-1"],"revoked_jtis":[]}`,
+      `{"version":1,"valid_until":${validUntil},"clients":{},"cli\\u0065nts":${clients},"revoked_jtis":[]}`,
+    ];
+
+    for (const policy of duplicatePolicies) {
+      await writeFile(policyFile, policy);
+      const client = await clientFor();
+      try {
+        expect((await client.listTools()).tools).toEqual([]);
+      } finally {
+        await client.close();
+      }
+      let invoked = 0;
+      const result = await gate.invoke(TOOL, { body: {} }, auth, async () => {
+        invoked += 1;
+        return "unexpected";
+      });
+      expect(result).toEqual({ text: "tool_not_permitted", isError: true });
+      expect(invoked).toBe(0);
+    }
+  });
+
   it("fails closed on an invalid policy file and keeps thrown handler details private", async () => {
     const config = await loadSecureGateConfig({
       issuer: ISSUER, resource: pilot.url, publicKeyFile, policyFile,

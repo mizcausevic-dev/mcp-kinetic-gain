@@ -5,8 +5,10 @@
 import { createPublicKey, randomUUID, verify, type KeyObject } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
+import { TextDecoder } from "node:util";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
+import { parseCardJson } from "./aviation-json.js";
 import type { ToolDispatchGate } from "./server.js";
 import {
   checkBrokerDecision, validateBrokerBridgeConfig,
@@ -191,7 +193,9 @@ async function readGatePolicy(path: string): Promise<GatePolicy> {
   } finally {
     await handle.close();
   }
-  const value: unknown = JSON.parse(raw.toString("utf8"));
+  // Duplicate policy keys can otherwise replace a revocation or client rule
+  // under JSON.parse's last-key-wins behavior. Reject malformed UTF-8 too.
+  const value = parseCardJson(new TextDecoder("utf-8", { fatal: true }).decode(raw));
   const now = Math.floor(Date.now() / 1000);
   if (!record(value) || !hasOnlyKeys(value, ["version", "valid_until", "clients", "revoked_jtis"]) ||
       value.version !== 1 || !Number.isSafeInteger(value.valid_until) ||
