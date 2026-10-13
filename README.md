@@ -15,14 +15,14 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `aeo_get_claim` - Extract a single AEO claim by ID
 - `aeo_well_known_url` - Compute the canonical AEO well-known URL for an origin
 - `prompt_provenance_validate` - Validate a Prompt Provenance JSON document against the v0.1
-- `prompt_provenance_inspect` - Structured summary of a Prompt Provenance document: prompt
+- `prompt_provenance_inspect` - Inspect an inline Prompt Provenance JSON document
 - `prompt_provenance_eval_result` - Extract a single evaluation suite's result from a Prompt
 - `agent_card_well_known_url` - Compute the canonical Agent Card well-known URL for a given
 - `agent_card_inspect` - Structured summary of an Agent Card document
 - `agent_card_tool_disclosure` - Return the list of tools an agent declares, with side-effect
 - `agent_card_validate` - Validate an Agent Card JSON document against the v0.1 schema.
-- `ai_evidence_validate` - Validate an AI Evidence object against the v0.1 schema.
-- `ai_evidence_inspect` - Structured summary of an AI Evidence object: claim text
+- `ai_evidence_validate` - Check the structure of an inline AI Evidence JSON document
+- `ai_evidence_inspect` - Inspect an inline AI Evidence JSON document
 - `ai_evidence_verify_hash` - Compute SHA-256 over the canonical UTF-8 form of
 - `tool_card_well_known_url` - Compute the canonical MCP Tool Card well-known URL
 - `tool_card_inspect` - Structured summary of an MCP Tool Card: tool identity, safety
@@ -47,7 +47,7 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `clinical_ai_well_known_url` - Compute the canonical Clinical AI Card well-known URL
 - `clinical_ai_fetch` - Fetch a Clinical AI Card from a URL
 - `clinical_ai_validate` - Validate a Clinical AI Card JSON document against the v0.1
-- `clinical_ai_inspect` - Structured summary of a Clinical AI Card: system identity
+- `clinical_ai_inspect` - Summarize an existing Clinical AI Card, inline or by URL
 - `incident_well_known_url` - Compute the canonical AI Incident Card well-known URL
 - `incident_fetch` - Fetch an AI Incident Card from a URL
 - `incident_validate` - Validate an AI Incident Card JSON document against the v0.1
@@ -92,6 +92,8 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fetch tools. Specs **without** one (Prompt Provenance, AI Evidence - these usually travel inline with answers or in repos, not at fixed paths) get parse tools that take a `document_json` string.
 
 ## Network and data boundaries
+
+Inline parsing tools make no outbound fetch from this server, but the MCP client, transport, and host still handle their input. [Glama's Gateway records full JSON-RPC payloads](https://glama.ai/mcp/faq), including tool arguments and results. Use synthetic data for Glama-hosted checks unless that logging and access boundary is approved for the data.
 
 URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. The optional live audit tools require both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` in the MCP server's environment. The token must match the audit-stream service's bearer token and have at least 32 visible ASCII characters. Use HTTPS for a remote service; HTTP is accepted only for loopback development. Missing or invalid configuration returns an error without sending a request. `audit_event_emit` sends `kind`, caller-asserted `source`, and `payload` to the configured service and validates its event receipt. The receipt does not prove durable storage or event completeness. Its shared token authenticates this MCP process, not the source label or tenant. Approve the write before calling it; omit secrets and personal data unless the service is approved for them. Hash-chain verification checks continuity only; it does not prove audit completeness.
 

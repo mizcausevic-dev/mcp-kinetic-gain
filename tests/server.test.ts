@@ -1041,6 +1041,14 @@ describe("Clinical AI Disclosure", () => {
     expect(out.evidence.bias_audit_uri).toBeTruthy();
     expect(out.patient_data.phi_processed).toBe(true);
   });
+
+  it("inspect uses inline JSON before a supplied URL", async () => {
+    const out = JSON.parse(await handlers.clinical_ai_inspect!({
+      document_json: JSON.stringify(SEPSIS_CARD),
+      url: "http://127.0.0.1/should-not-be-fetched",
+    }));
+    expect(out.system.id).toBe("kineticgain-sepsis-ews");
+  });
 });
 
 // ----------------------------------------------------------------------------
