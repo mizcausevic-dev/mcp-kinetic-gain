@@ -11,6 +11,10 @@
   "types": "./dist/server.d.ts",
   "files": [
     "dist",
+    "!dist/secure-http.*",
+    "!dist/secure-gate.*",
+    "!dist/broker-bridge.*",
+    "!dist/external-revocation.*",
     "README.md",
     "LICENSE"
   ],

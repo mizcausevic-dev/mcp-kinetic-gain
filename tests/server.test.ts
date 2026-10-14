@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer, type Server as HttpServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { handlers } from "../src/server.js";
 import { __allowFetchTargetForTests, canonicalSha256, stripTrailingSlashes } from "../src/common.js";
@@ -1041,6 +1041,14 @@ describe("Clinical AI Disclosure", () => {
     expect(out.evidence.bias_audit_uri).toBeTruthy();
     expect(out.patient_data.phi_processed).toBe(true);
   });
+
+  it("inspect uses inline JSON before a supplied URL", async () => {
+    const out = JSON.parse(await handlers.clinical_ai_inspect!({
+      document_json: JSON.stringify(SEPSIS_CARD),
+      url: "http://127.0.0.1/should-not-be-fetched",
+    }));
+    expect(out.system.id).toBe("kineticgain-sepsis-ews");
+  });
 });
 
 // ----------------------------------------------------------------------------
@@ -1360,11 +1368,13 @@ describe("CLI dispatch", () => {
     expect(out.exitCode).toBe(0);
   });
 
-  it("keeps CLI help aligned with all 12 Suite spec detectors", () => {
+  it("keeps CLI help aligned with 12 base spec and 2 aviation card detectors", () => {
     const cliSource = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
-    expect(cliSource).toContain("against the 12 specs");
+    expect(cliSource).toContain("against 12 base specs and 2 aviation cards");
     expect(cliSource).toContain("decision_card_version");
     expect(cliSource).toContain("claims_card_version");
+    expect(cliSource).toContain("aviation_ml_card_version");
+    expect(cliSource).toContain("mro_signoff_card_version");
   });
 
   it("rejects unknown flags with exit code 3", async () => {
@@ -1443,6 +1453,23 @@ describe("CLI validate command", () => {
     expect(passingCode).toBe(0);
     const code = await runValidate([join(workDir, "*-aeo.json")]);
     expect(code).toBe(1);
+  });
+
+  it("deduplicates an absolute literal and glob outside the repository", async () => {
+    const file = join(workDir, "valid-aeo.json");
+    const output: string[] = [];
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      output.push(String(chunk));
+      return true;
+    });
+    try {
+      expect(await runValidate([file, join(workDir, "valid-*.json")])).toBe(0);
+    } finally {
+      stdout.mockRestore();
+    }
+    const text = output.join("");
+    expect(text).toContain("1 file(s) matched");
+    expect(text).toContain(relative(process.cwd(), file).split("\\").join("/"));
   });
 
   it("aggregates: one failing file in a mixed batch makes the run fail", async () => {

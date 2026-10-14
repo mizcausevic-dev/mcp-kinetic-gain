@@ -1,0 +1,56 @@
+{
+  "aviation_ml_card_version": "0.1",
+  "system": {
+    "id": "synthetic-inspection-assistant",
+    "name": "Synthetic Inspection Assistant",
+    "version": "0.1.0",
+    "provider": "Fictional Aviation Lab",
+    "intended_use": "Suggest regions of interest in synthetic stationary inspection images for a human to review."
+  },
+  "assurance": {
+    "easa_ai_level": "2B",
+    "target_dal": "not_assigned",
+    "standards_posture": [
+      { "identifier": "SAE ARP6983", "status": "referenced" },
+      { "identifier": "EUROCAE ED-324", "status": "mapping_in_progress" }
+    ]
+  },
+  "odd": {
+    "summary": "Fictional stationary inspection imagery within a declared illumination band only.",
+    "operating_conditions": ["stationary inspection", "declared illumination range"],
+    "excluded_conditions": ["in-flight use", "unreviewed image sensors"],
+    "coverage_evidence_refs": ["https://example.invalid/aviation/packet/dataset-report.json"],
+    "condition_evidence": [
+      {
+        "condition": "stationary inspection",
+        "condition_id": "stationary-inspection",
+        "bin_refs": [{ "dimension": "inspection-mode", "bin": "stationary" }],
+        "evidence_refs": ["https://example.invalid/aviation/packet/dataset-report.json"]
+      },
+      {
+        "condition": "declared illumination range",
+        "condition_id": "declared-illumination-range",
+        "bin_refs": [{ "dimension": "illumination", "bin": "declared-range" }],
+        "evidence_refs": ["https://example.invalid/aviation/packet/dataset-report.json"]
+      }
+    ]
+  },
+  "learning_assurance": {
+    "process_summary": "Fictional offline model updates would require a new review and evidence packet.",
+    "evidence_refs": []
+  },
+  "data_management": {
+    "dataset_manifest_refs": ["https://example.invalid/aviation/packet/dataset-manifest.json"],
+    "split_policy": "group_disjoint",
+    "leakage_check_ref": "https://example.invalid/aviation/packet/dataset-report.json"
+  },
+  "human_ai_teaming": {
+    "role": "decision_support",
+    "human_override_available": true,
+    "override_procedure_ref": "https://example.invalid/aviation/packet/override-procedure",
+    "human_responsibility_summary": "A fictional human reviews each suggestion; this model cannot approve maintenance or release an aircraft."
+  },
+  "links": {
+    "incident_card_index_uri": "https://example.invalid/aviation/packet/incident-index.json"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "mro_signoff_card_version": "0.1",
+  "finding": {
+    "id": "synthetic-borescope-finding-001",
+    "kind": "borescope",
+    "summary": "Synthetic imagery suggests a region for human inspection; no aircraft condition is asserted.",
+    "model_id": "synthetic-inspection-assistant",
+    "model_version": "0.1.0",
+    "confidence": 0.71
+  },
+  "artifact": {
+    "id": "synthetic-observation-001",
+    "sha256": "48ec03319a4a3905c41b09cacd6c0e4fa0c1d94489786c475110ff8050aa0af6",
+    "media_type": "application/json",
+    "byte_length": 80
+  },
+  "evidence_refs": [
+    "https://example.invalid/aviation/packet/synthetic-observation.json",
+    "https://example.invalid/aviation/packet/dataset-report.json"
+  ],
+  "human_review": {
+    "staff_id": "synthetic-reviewer-01",
+    "decision": "override",
+    "reviewed_at": "2026-10-12T20:49:50Z",
+    "authority_ref": "https://example.invalid/aviation/packet/authority/synthetic-reviewer-01",
+    "comment": "Fixture review of an AI suggestion only, not a maintenance release.",
+    "override_reason": "Synthetic evaluation omission; discard the model suggestion pending separate human assessment."
+  },
+  "signature": {
+    "profile": "JCS-SHA256-Ed25519-v1",
+    "key_id": "synthetic-aero-packet-reviewer-sha256-c06a1b31969f7884a6dd0a207bdf1b2ea78a594bc99b7f797a170b65c1c48bbb",
+    "signed_at": "2026-10-12T20:49:51Z",
+    "signature_b64url": "JOcwz9QF1RpY5R_VJDjSl0bmBW26sYoJho-Nfr6x38TTJkpnrBBLQxsQARpTWpJtcmPUAgGEiklHwLsgxPXvDA"
+  }
+}

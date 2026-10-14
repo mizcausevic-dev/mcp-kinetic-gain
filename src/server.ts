@@ -2,9 +2,9 @@
 /**
  * Unified MCP server for the Kinetic Gain Protocol Suite.
  *
- * @tool-count 75  - CI-enforced (tests/tool-count.test.ts) to equal
- *   toolDescriptors.length. The ListTools handler returns toolDescriptors
- *   verbatim, so the array is the single source of truth for the count.
+ * @tool-count 75  - CI-enforced for the default stdio profile.
+ *   MCP_KG_VERTICALS=aviation adds five opt-in tools. The separate secure
+ *   HTTP source pilot always uses the 75-tool base profile behind its gate.
  *
  * v0.9.0: AI Claims Decision Card (InsurTech) - the 12th Suite spec. 4 new
  *   claims_card_* tools (validate / inspect / sign / chain), 71 -> 75 tools,
@@ -66,8 +66,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
 import { toolDescriptors } from "./tools.js";
+import { aviationToolDescriptors } from "./aviation-tools.js";
+import { aviationHandlers } from "./handlers/aviation.js";
 import { PACKAGE_VERSION } from "./version.js";
 
 import {
@@ -322,33 +325,85 @@ function isStructuredErrorResult(name: string, result: string): boolean {
   }
 }
 
-export function buildServer(): Server {
+export interface ToolDispatchGate {
+  availableTools(auth: AuthInfo | undefined): Promise<string[]>;
+  invoke(
+    name: string,
+    args: Record<string, unknown>,
+    auth: AuthInfo | undefined,
+    handler: () => Promise<string>,
+  ): Promise<{ text: string; isError?: boolean }>;
+}
+
+/** The aviation vertical is opt-in so existing clients retain 75 listed tools. */
+export function selectToolProfile(verticals: string | undefined = process.env.MCP_KG_VERTICALS) {
+  const requested = verticals?.trim() ?? "";
+  if (requested !== "" && requested !== "aviation") {
+    throw new Error("MCP_KG_VERTICALS must be unset or exactly 'aviation'");
+  }
+  const aviationEnabled = requested === "aviation";
+  return {
+    aviationEnabled,
+    descriptors: aviationEnabled ? [...toolDescriptors, ...aviationToolDescriptors] : toolDescriptors,
+    handlers: aviationEnabled ? { ...handlers, ...aviationHandlers } : handlers,
+  };
+}
+
+export function buildServer(verticals?: string): Server;
+export function buildServer(gate: ToolDispatchGate): Server;
+export function buildServer(gateOrVerticals?: ToolDispatchGate | string): Server {
+  const gate = typeof gateOrVerticals === "string" ? undefined : gateOrVerticals;
+  // The governed endpoint is scoped to the one existing source tool, even if
+  // a host accidentally sets MCP_KG_VERTICALS=aviation in its environment.
+  const profile = selectToolProfile(gate ? "" :
+    typeof gateOrVerticals === "string" ? gateOrVerticals : process.env.MCP_KG_VERTICALS);
   const server = new Server(
     { name: "mcp-kinetic-gain", version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: toolDescriptors,
-  }));
+  server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+    if (!gate) return { tools: profile.descriptors };
+    try {
+      const names = new Set(await gate.availableTools(extra.authInfo));
+      return { tools: profile.descriptors.filter((tool) => names.has(tool.name)) };
+    } catch {
+      // The governed endpoint never advertises tools if its gate is unavailable.
+      return { tools: [] };
+    }
+  });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
-    const handler = handlers[name];
-    if (!handler) {
+    const handler = Object.prototype.hasOwnProperty.call(profile.handlers, name)
+      ? profile.handlers[name]
+      : undefined;
+    if (!handler && !gate) {
       return {
         content: [{ type: "text", text: `unknown tool: ${name}` }],
         isError: true,
       };
     }
     try {
+      if (gate) {
+        const gated = await gate.invoke(name, args ?? {}, extra.authInfo, () => {
+          if (!handler) throw new Error("unknown tool");
+          return handler(args ?? {});
+        });
+        return {
+          content: [{ type: "text" as const, text: gated.text }],
+          isError: gated.isError ?? isStructuredErrorResult(name, gated.text),
+        };
+      }
+      if (!handler) throw new Error("unknown tool");
       const result = await handler(args ?? {});
       const content = [{ type: "text" as const, text: result }];
       return isStructuredErrorResult(name, result)
         ? { content, isError: true }
         : { content };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // A remote caller must not receive handler, credential, or sink errors.
+      const message = gate ? "tool call failed" : err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: message }], isError: true };
     }
   });
@@ -357,11 +412,13 @@ export function buildServer(): Server {
 }
 
 async function main(): Promise<void> {
-  const server = buildServer();
+  const verticals = process.env.MCP_KG_VERTICALS;
+  const profile = selectToolProfile(verticals);
+  const server = buildServer(verticals);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 12 specs + DefenseTech)\n`,
+    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${profile.descriptors.length} tools across 12 base specs${profile.aviationEnabled ? " + 2 aviation cards" : ""} + DefenseTech)\n`,
   );
 }
 

@@ -15,14 +15,14 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `aeo_get_claim` - Extract a single AEO claim by ID
 - `aeo_well_known_url` - Compute the canonical AEO well-known URL for an origin
 - `prompt_provenance_validate` - Validate a Prompt Provenance JSON document against the v0.1
-- `prompt_provenance_inspect` - Structured summary of a Prompt Provenance document: prompt
+- `prompt_provenance_inspect` - Inspect an inline Prompt Provenance JSON document
 - `prompt_provenance_eval_result` - Extract a single evaluation suite's result from a Prompt
 - `agent_card_well_known_url` - Compute the canonical Agent Card well-known URL for a given
 - `agent_card_inspect` - Structured summary of an Agent Card document
 - `agent_card_tool_disclosure` - Return the list of tools an agent declares, with side-effect
 - `agent_card_validate` - Validate an Agent Card JSON document against the v0.1 schema.
-- `ai_evidence_validate` - Validate an AI Evidence object against the v0.1 schema.
-- `ai_evidence_inspect` - Structured summary of an AI Evidence object: claim text
+- `ai_evidence_validate` - Check the structure of an inline AI Evidence JSON document
+- `ai_evidence_inspect` - Inspect an inline AI Evidence JSON document
 - `ai_evidence_verify_hash` - Compute SHA-256 over the canonical UTF-8 form of
 - `tool_card_well_known_url` - Compute the canonical MCP Tool Card well-known URL
 - `tool_card_inspect` - Structured summary of an MCP Tool Card: tool identity, safety
@@ -47,7 +47,7 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 - `clinical_ai_well_known_url` - Compute the canonical Clinical AI Card well-known URL
 - `clinical_ai_fetch` - Fetch a Clinical AI Card from a URL
 - `clinical_ai_validate` - Validate a Clinical AI Card JSON document against the v0.1
-- `clinical_ai_inspect` - Structured summary of a Clinical AI Card: system identity
+- `clinical_ai_inspect` - Summarize an existing Clinical AI Card, inline or by URL
 - `incident_well_known_url` - Compute the canonical AI Incident Card well-known URL
 - `incident_fetch` - Fetch an AI Incident Card from a URL
 - `incident_validate` - Validate an AI Incident Card JSON document against the v0.1
@@ -89,11 +89,44 @@ This is the agent-facing companion to [kinetic-gain-visualizer](https://github.c
 </details>
 <!-- END TOOL CATALOG -->
 
+## Optional Aerospace vertical
+
+The source checkout includes five **local, read-only** tools for two aviation
+cards. The default `tools/list` remains the existing 75 tools. Set
+`MCP_KG_VERTICALS=aviation` on the **same** MCP server entry and restart the
+client to list 80 tools. An unknown profile fails startup rather than silently
+changing the tool set. The aviation cards are also recognized by the CLI and
+`suite_doc_detect_spec` without enabling the MCP profile.
+CLI validation checks card structure and Suite rules only; `mro_signoff_verify`
+is the separate cryptographic check and still requires an externally trusted key.
+
+| Tool | Result and limit |
+| --- | --- |
+| `aviation_ml_card_validate` | Structural v0.1 card validation; no airworthiness approval. |
+| `aviation_ml_card_inspect` | Summary of vendor declarations; referenced evidence is not fetched. |
+| `aviation_ml_card_odd_check` | Flags operating conditions with no evidence reference; does not judge dataset coverage. |
+| `aviation_ml_card_dal_check` | Summarizes proposed target DAL and documentation gaps; does not assign or certify a DAL. |
+| `mro_signoff_verify` | Checks a JCS-SHA256-Ed25519 signature against a caller-pinned key and optional independent artifact digest. It does not verify staff identity or authority and cannot authorize return to service. |
+
+For Claude Desktop, add `"env": { "MCP_KG_VERTICALS": "aviation" }` inside the
+existing `kinetic-gain` config entry. These tools take inline `document_json`;
+none fetch a card, evidence URL, dataset, or authority record. Keep real
+maintenance, aircraft, and controlled technical data out of hosted MCP clients
+unless that client's retention and access boundary has been approved.
+
 Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fetch tools. Specs **without** one (Prompt Provenance, AI Evidence - these usually travel inline with answers or in repos, not at fixed paths) get parse tools that take a `document_json` string.
 
 ## Network and data boundaries
 
-URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. The optional live audit tools require both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` in the MCP server's environment. The token must match the audit-stream service's bearer token and have at least 32 visible ASCII characters. Use HTTPS for a remote service; HTTP is accepted only for loopback development. Missing or invalid configuration returns an error without sending a request. `audit_event_emit` sends `kind`, caller-asserted `source`, and `payload` to the configured service and validates its event receipt. The receipt does not prove durable storage or event completeness. Its shared token authenticates this MCP process, not the source label or tenant. Approve the write before calling it; omit secrets and personal data unless the service is approved for them. Hash-chain verification checks continuity only; it does not prove audit completeness.
+Inline parsing tools make no outbound fetch from this server, but the MCP client, transport, and host still handle their input. [Glama's Gateway records full JSON-RPC payloads](https://glama.ai/mcp/faq), including tool arguments and results. Use synthetic data for Glama-hosted checks unless that logging and access boundary is approved for the data.
+
+In the default stdio preview, URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. The optional live audit tools require both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` in the MCP server's environment. The token must match the audit-stream service's bearer token and have at least 32 visible ASCII characters. Use HTTPS for a remote service; HTTP is accepted only for loopback development. Missing or invalid configuration returns an error without sending a request. The stdio `audit_event_emit` tool sends `kind`, caller-asserted `source`, and `payload` to the configured service and validates its event receipt. The receipt does not prove durable storage or event completeness. Its shared token authenticates this MCP process, not the source label or tenant. Approve the write before calling it; omit secrets and personal data unless the service is approved for them. Hash-chain verification checks continuity only; it does not prove audit completeness.
+
+### Unreleased loopback source pilot
+
+The GitHub source contains a separate `node dist/secure-http.js` entry point for a **one-tool source pilot**. Its modules are excluded from the npm package. In a source checkout after `npm run build`, it binds only to `127.0.0.1` and uses SDK v1 Streamable HTTP. A short-lived Ed25519 bearer token with an exact resource audience, a server-owned expiring client allowlist, a Python Broker signed-card decision, and an accepted scoped Audit Sink receipt gate the `suite_doc_detect_spec` MCP call. That governed endpoint always uses the base profile even if `MCP_KG_VERTICALS=aviation` is set. The usual `mcp-kinetic-gain` stdio entry point remains an ungated local preview with 75 tools by default or 80 with aviation enabled. Do not expose or proxy that command as a governed runtime.
+
+See [the source pilot contract](docs/SECURE_HTTP_PILOT.md) in the GitHub source for the required environment, bounded local policy and Broker snapshots, audit event lifecycle, tests, and rollback. The pilot does not issue OAuth tokens, establish real buyer or condition authority, or provide a complete production audit trail. Its local revocation snapshots can be rolled back to an older valid state. This source pilot adds a synthetic Cloud Storage withdrawal reader for the proposed private GCE CLI; it has only local mock coverage and requires separately approved IAM, a writer outside the VM, and a hosted drill. The same project owner can still replace that source, so this is not independent custody. A change after the last Broker check can still race handler entry. Do not publicly route it as production enforcement.
 
 Schema validation checks the document shape and selected rules. A passing result is not proof of FERPA, COPPA, HIPAA, FDA, EU AI Act, CMMC, export-control status, or other legal compliance. `attestation_verify` checks a signature against the public key supplied by the caller; it does not establish the key owner's identity. `aup_check_compliance` evaluates eight disclosed fields only; it does not check policy scope, tool/vendor requirements, parent consent, or Tutor Cards. A true `allowed` value is not an authorization grant. DefenseTech tools calculate from supplied data; they do not classify materials or verify a person's status or license. Positive Decision Cards require the live policy engine's identity, scope, action, expiry, and trusted-attestation checks before an enforceable bundle can be created.
 

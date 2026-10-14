@@ -1,0 +1,10 @@
+# Mirrors the reviewed Broker 0.1.0 host extra at commit
+# 614b630c2dd1dea1b63526ea94f256e8dfcb50b0.
+# Resolve for the private pilot's Python 3.11 Linux environment.
+httpx>=0.27
+pydantic>=2.7
+PyYAML>=6.0
+policy-as-code-engine==0.2.1
+regex>=2024.11.6,<2027
+PyJWT[crypto]==2.15.1
+hatchling>=1.25
