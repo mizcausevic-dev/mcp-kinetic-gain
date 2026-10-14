@@ -329,7 +329,7 @@ describe("aviation CLI validation scope", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 15_000);
 
   it("does not treat CLI structure validation as signature verification", async () => {
     const directory = await mkdtemp(join(tmpdir(), "kg-aviation-cli-"));

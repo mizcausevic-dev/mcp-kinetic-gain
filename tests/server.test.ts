@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer, type Server as HttpServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { handlers } from "../src/server.js";
 import { __allowFetchTargetForTests, canonicalSha256, stripTrailingSlashes } from "../src/common.js";
@@ -1453,6 +1453,23 @@ describe("CLI validate command", () => {
     expect(passingCode).toBe(0);
     const code = await runValidate([join(workDir, "*-aeo.json")]);
     expect(code).toBe(1);
+  });
+
+  it("deduplicates an absolute literal and glob outside the repository", async () => {
+    const file = join(workDir, "valid-aeo.json");
+    const output: string[] = [];
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      output.push(String(chunk));
+      return true;
+    });
+    try {
+      expect(await runValidate([file, join(workDir, "valid-*.json")])).toBe(0);
+    } finally {
+      stdout.mockRestore();
+    }
+    const text = output.join("");
+    expect(text).toContain("1 file(s) matched");
+    expect(text).toContain(relative(process.cwd(), file).split("\\").join("/"));
   });
 
   it("aggregates: one failing file in a mixed batch makes the run fail", async () => {

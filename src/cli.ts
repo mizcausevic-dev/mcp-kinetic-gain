@@ -15,8 +15,9 @@
  * With no subcommand, falls through to MCP stdio server mode.
  */
 import { readFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, relative } from "node:path";
 import { TextDecoder } from "node:util";
-import { glob } from "tinyglobby";
+import { glob, isDynamicPattern } from "tinyglobby";
 import type { ZodTypeAny } from "zod";
 
 import {
@@ -174,13 +175,20 @@ async function expandPatterns(patterns: string[]): Promise<string[]> {
   const out: string[] = [];
   for (const pat of patterns) {
     const normalized = pat.split("\\").join("/");
-    const matches = await glob(normalized, {
+    const directory = dirname(normalized);
+    // With an absolute pattern outside the current directory, tinyglobby
+    // otherwise crawls from the drive root. Anchor a static parent and match
+    // only the final segment. Keep its old path form for output and deduping.
+    const anchored = isAbsolute(normalized) && !isDynamicPattern(directory);
+    const matches = await glob(anchored ? basename(normalized) : normalized, {
+      ...(anchored ? { cwd: directory, absolute: true } : {}),
       onlyFiles: true,
       dot: true,
       followSymbolicLinks: false,
       expandDirectories: false,
     });
-    for (const m of matches) {
+    for (const match of matches) {
+      const m = anchored ? relative(process.cwd(), match).split("\\").join("/") : match;
       if (!seen.has(m)) {
         seen.add(m);
         out.push(m);
