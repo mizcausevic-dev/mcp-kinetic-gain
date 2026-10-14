@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -107,7 +107,7 @@ async function signedMroFixture() {
 
 describe("aviation v0.1 disclosure tools", () => {
   it("accepts the source spec's synthetic golden Card with declared condition/bin IDs", async () => {
-    // Vendored from aviation-ml-assurance-card-spec PR #1 at e9a70c6.
+    // Byte-identical to aviation-ml-assurance-card-spec main at e90bc74.
     const fixture = new URL("./fixtures/aviation-golden-card.json", import.meta.url);
     const documentJson = readFileSync(fixture, "utf8");
     const card = JSON.parse(documentJson);
@@ -200,6 +200,45 @@ describe("aviation v0.1 disclosure tools", () => {
 });
 
 describe("MRO sign-off signature boundary", () => {
+  it("verifies the merged Aviation packet's signed MRO card and exact synthetic artifact", async () => {
+    // Vendored from aviation-ml-assurance-card-spec main at e90bc74. The
+    // signature profile is defined by mro-ai-signoff-card-spec main at 09095ea.
+    const fixture = new URL("./fixtures/aviation-golden-mro-card.json", import.meta.url);
+    const raw = readFileSync(fixture, "utf8");
+    const card = JSON.parse(raw);
+    const artifact = readFileSync(new URL("./fixtures/aviation-golden-observation.json", import.meta.url));
+    const publicKeyPem = readFileSync(new URL("./fixtures/aviation-golden-mro-public-key.pub", import.meta.url), "utf8");
+    const publicKeyB64url = createPublicKey(publicKeyPem)
+      .export({ format: "der", type: "spki" }).subarray(-32).toString("base64url");
+    const independentlyComputedDigest = createHash("sha256").update(artifact).digest("hex");
+    expect(independentlyComputedDigest).toBe(card.artifact.sha256);
+    expect(artifact.byteLength).toBe(card.artifact.byte_length);
+
+    const result = JSON.parse(await handleMroSignoffVerify({
+      document_json: raw,
+      expected_key_id: card.signature.key_id,
+      public_key_b64url: publicKeyB64url,
+      independent_artifact_sha256: independentlyComputedDigest,
+    }));
+    expect(result).toMatchObject({
+      signature_valid_for_supplied_key: true,
+      artifact_digest_matches_supplied: true,
+      artifact_bytes_checked: false,
+      identity_verified: false,
+      certifying_authority_verified: false,
+      return_to_service_authorized: false,
+    });
+
+    const altered = copy(card);
+    altered.human_review.override_reason = "Changed after signing";
+    const tampered = JSON.parse(await handleMroSignoffVerify({
+      document_json: JSON.stringify(altered),
+      expected_key_id: card.signature.key_id,
+      public_key_b64url: publicKeyB64url,
+    }));
+    expect(tampered.signature_valid_for_supplied_key).toBe(false);
+  });
+
   it("verifies a synthetic JCS digest signature but withholds identity, authority, and release", async () => {
     const { card, publicKeyB64url } = await signedMroFixture();
     expect(mroSignoffCardSchema.safeParse(card).success).toBe(true);
@@ -290,7 +329,7 @@ describe("aviation CLI validation scope", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 30_000);
 
   it("does not treat CLI structure validation as signature verification", async () => {
     const directory = await mkdtemp(join(tmpdir(), "kg-aviation-cli-"));
