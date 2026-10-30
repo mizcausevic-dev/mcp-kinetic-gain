@@ -261,7 +261,7 @@ export type McpToolCard = z.infer<typeof mcpToolCardSchema>;
 // ----------------------------------------------------------------------------
 // AI Tutor Card (EdTech extension of the Suite)
 // ----------------------------------------------------------------------------
-export const tutorCardSchema = z
+export const tutorCardDisclosureSchema = z
   .object({
     tutor_card_version: z.string(),
     tutor: z.object({
@@ -340,6 +340,14 @@ export const tutorCardSchema = z
       .optional(),
   })
   .strict();
+export const tutorCardSchema = tutorCardDisclosureSchema.superRefine((card, context) => {
+  if (card.audience.age_range_min > card.audience.age_range_max) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["audience", "age_range_max"], message: "Maximum age must not be less than minimum age." });
+  }
+  if (card.audience.age_range_min < 13 && !card.data_privacy.coppa_compliant) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["data_privacy", "coppa_compliant"], message: "Under-13 audience requires coppa_compliant=true as a publisher disclosure." });
+  }
+});
 export type TutorCard = z.infer<typeof tutorCardSchema>;
 
 // ----------------------------------------------------------------------------
