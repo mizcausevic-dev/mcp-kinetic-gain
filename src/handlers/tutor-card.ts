@@ -1,16 +1,19 @@
 import { tutorCardDisclosureSchema, tutorCardSchema, type TutorCard } from "../schemas.js";
 import { errorJson, fetchJson, pretty } from "../common.js";
+import { isIP } from "node:net";
 
 const WELL_KNOWN_PREFIX = "/.well-known/tutors/";
 const TUTOR_ID = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export function tutorWellKnownUrl(origin: string, tutor_id: string): string {
   const parsed = new URL(origin);
+  const host = parsed.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (
     parsed.protocol !== "https:" || parsed.username || parsed.password ||
-    parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash
+    parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash ||
+    isIP(host) !== 0 || host === "localhost" || host.endsWith(".local")
   ) {
-    throw new Error("origin must be an HTTPS origin without credentials, path, query, or fragment");
+    throw new Error("origin must be an HTTPS hostname without credentials, port, path, query, fragment, or local/IP host");
   }
   if (!TUTOR_ID.test(tutor_id)) throw new Error("tutor_id must be a kebab-case identifier");
   return parsed.origin + WELL_KNOWN_PREFIX + tutor_id + ".json";

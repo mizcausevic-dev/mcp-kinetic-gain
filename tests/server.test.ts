@@ -451,8 +451,8 @@ describe("AI Tutor Cards", () => {
   });
 
   it("well_known_url rejects noncanonical origins and tutor IDs", async () => {
-    for (const origin of ["http://edu.example.com", "https://edu.example.com/path", "https://edu.example.com:8443"]) {
-      await expect(handlers.tutor_card_well_known_url!({ origin, tutor_id: "math" })).rejects.toThrow("HTTPS origin");
+    for (const origin of ["http://edu.example.com", "https://edu.example.com/path", "https://edu.example.com:8443", "https://127.0.0.1", "https://localhost", "https://printer.local"]) {
+      await expect(handlers.tutor_card_well_known_url!({ origin, tutor_id: "math" })).rejects.toThrow("HTTPS hostname");
     }
     await expect(handlers.tutor_card_well_known_url!({ origin: "https://edu.example.com", tutor_id: "math/../admin" })).rejects.toThrow("kebab-case");
   });
