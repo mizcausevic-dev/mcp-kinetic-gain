@@ -161,7 +161,7 @@ export const agentCardSchema = z.object({
       z.object({
         suite: z.string(),
         result_uri: z.string(),
-        metrics: z.record(z.unknown()).optional(),
+        metrics: z.record(z.string(), z.unknown()).optional(),
         ran_at: z.string(),
       }),
     )
@@ -226,7 +226,7 @@ export const mcpToolCardSchema = z.object({
   }),
   schema: z.object({
     input_schema_uri: z.string().optional(),
-    input_schema_inline: z.record(z.unknown()).optional(),
+    input_schema_inline: z.record(z.string(), z.unknown()).optional(),
   }),
   safety: z.object({
     side_effect_class: z.enum(["read", "mutating", "external", "destructive"]),
@@ -326,7 +326,7 @@ export const tutorCardSchema = z
         z.object({
           suite: z.string(),
           result_uri: z.string(),
-          metrics: z.record(z.unknown()).optional(),
+          metrics: z.record(z.string(), z.unknown()).optional(),
           ran_at: z.string(),
         }),
       )
@@ -800,7 +800,7 @@ export const clinicalAiCardSchema = z
     evaluations: z.array(z.object({
       suite: z.string(),
       result_uri: z.string(),
-      metrics: z.record(z.unknown()).optional(),
+      metrics: z.record(z.string(), z.unknown()).optional(),
       ran_at: z.string(),
       accreditation_body: z.string().optional(),
     })).optional(),
