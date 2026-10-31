@@ -150,6 +150,8 @@ This profile is a source candidate and is **not in the published `0.10.0` packag
 
 The [core names](src/tool-profiles.ts) are a task-selection hypothesis, not a claim of compliance or a measured maintenance capacity. The other 55 handlers remain in the compatibility surface and need fixes while callable. Aviation PR #52 is separate: its current opt-in mode lists 80 tools, and no 25-tool combined profile has been built or tested.
 
+After building this source checkout, run `node scripts/verify-profile-stdio.mjs` to exercise the compiled stdio entry point in default, `compat`, and `core` modes. The probe uses synthetic local inputs and verifies a direct-call denial; it does not test a hosted provider or real client task-selection outcomes.
+
 ## CLI mode (v0.5.1+)
 
 The same binary doubles as a Suite JSON validator outside any MCP host. Useful in CI, pre-commit hooks, or local sanity-checks.
