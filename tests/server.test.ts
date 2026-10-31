@@ -180,6 +180,12 @@ describe("AEO Protocol", () => {
     expect(out.url).toBe("https://example.com/.well-known/aeo.json");
   });
 
+  it("aeo_well_known_url rejects noncanonical origins", async () => {
+    for (const invalid of ["http://example.com", "https://example.com/path", "https://user@example.com", "https://127.0.0.1"]) {
+      await expect(handlers.aeo_well_known_url!({ origin: invalid })).rejects.toThrow("HTTPS hostname");
+    }
+  });
+
   it("aeo_fetch returns the full document", async () => {
     const out = JSON.parse(await handlers.aeo_fetch!({ origin }));
     expect(out.entity.name).toBe("Example Org");
@@ -444,6 +450,13 @@ describe("AI Tutor Cards", () => {
     expect(out.url).toBe("https://edu.example.com/.well-known/tutors/k12-math-tutor.json");
   });
 
+  it("well_known_url rejects noncanonical origins and tutor IDs", async () => {
+    for (const origin of ["http://edu.example.com", "https://edu.example.com/path", "https://edu.example.com:8443", "https://127.0.0.1", "https://localhost", "https://printer.local"]) {
+      await expect(handlers.tutor_card_well_known_url!({ origin, tutor_id: "math" })).rejects.toThrow("HTTPS hostname");
+    }
+    await expect(handlers.tutor_card_well_known_url!({ origin: "https://edu.example.com", tutor_id: "math/../admin" })).rejects.toThrow("kebab-case");
+  });
+
   it("validate accepts a conforming card", async () => {
     const out = JSON.parse(await handlers.tutor_card_validate!({ document_json: json }));
     expect(out.valid).toBe(true);
@@ -456,8 +469,15 @@ describe("AI Tutor Cards", () => {
         document_json: JSON.stringify(COPPA_VIOLATING_TUTOR_CARD),
       }),
     );
-    expect(out.coppa_check.ok).toBe(false);
-    expect(out.coppa_check.reason).toContain("SPEC VIOLATION");
+    expect(out.valid).toBe(false);
+    expect(out.reason).toContain("coppa_compliant");
+  });
+
+  it("validate rejects a reversed age range", async () => {
+    const card = { ...TUTOR_CARD, audience: { ...TUTOR_CARD.audience, age_range_min: 18, age_range_max: 8 } };
+    const out = JSON.parse(await handlers.tutor_card_validate!({ document_json: JSON.stringify(card) }));
+    expect(out.valid).toBe(false);
+    expect(out.reason).toContain("age_range_max");
   });
 
   it("inspect returns procurement summary", async () => {
@@ -504,6 +524,8 @@ describe("AI Tutor Cards", () => {
       }),
     );
     expect(out.error).toBe("coppa_violation");
+    expect(out.ok).toBe(false);
+    expect(out.reason).toContain("independent review");
   });
 });
 
