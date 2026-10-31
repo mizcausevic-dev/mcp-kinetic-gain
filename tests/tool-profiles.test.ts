@@ -6,7 +6,7 @@ import { buildServer } from "../src/server.js";
 import { CORE_TOOL_NAMES, selectToolProfile } from "../src/tool-profiles.js";
 import { toolDescriptors } from "../src/tools.js";
 
-async function withClient<T>(profile: string, run: (client: Client) => Promise<T>): Promise<T> {
+async function withClient<T>(profile: string | undefined, run: (client: Client) => Promise<T>): Promise<T> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const server = buildServer(profile);
   const client = new Client({ name: "profile-smoke", version: "1.0.0" }, { capabilities: {} });
@@ -37,6 +37,21 @@ describe("opt-in tool profiles", () => {
   it("rejects unknown profile names before starting the server", () => {
     expect(() => selectToolProfile("aviation")).toThrow("MCP_KG_TOOL_PROFILE");
     expect(() => buildServer("CORE")).toThrow("MCP_KG_TOOL_PROFILE");
+  });
+
+  it("selects the startup menu from MCP_KG_TOOL_PROFILE", async () => {
+    const previous = process.env.MCP_KG_TOOL_PROFILE;
+    try {
+      process.env.MCP_KG_TOOL_PROFILE = "core";
+      await withClient(undefined, async (client) => {
+        expect((await client.listTools()).tools).toHaveLength(20);
+      });
+      process.env.MCP_KG_TOOL_PROFILE = "unrecognized";
+      expect(() => buildServer()).toThrow("MCP_KG_TOOL_PROFILE");
+    } finally {
+      if (previous === undefined) delete process.env.MCP_KG_TOOL_PROFILE;
+      else process.env.MCP_KG_TOOL_PROFILE = previous;
+    }
   });
 
   it("blocks unlisted direct calls before dispatching a handler", async () => {
