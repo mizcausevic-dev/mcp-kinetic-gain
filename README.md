@@ -93,6 +93,8 @@ Specs **with a well-known URL convention** (AEO, Agent Cards, Tool Cards) get fe
 
 ## Network and data boundaries
 
+**Source candidate:** this branch enforces each advertised JSON input schema at the MCP `tools/call` boundary before any handler runs. Missing, mistyped, and undeclared top-level arguments return an MCP tool error. This behavior is not in the published `0.10.0` package; clients relying on undocumented arguments must be reviewed before a release. The validation checks argument structure, not the truth of a vendor declaration or the identity of a caller.
+
 URL fetch tools make outbound HTTP(S) requests to user-supplied origins. The server rejects local and nonpublic destinations, rechecks redirects, and limits JSON responses to 1 MB. The optional live audit tools require both `AUDIT_STREAM_URL` and `AUDIT_STREAM_TOKEN` in the MCP server's environment. The token must match the audit-stream service's bearer token and have at least 32 visible ASCII characters. Use HTTPS for a remote service; HTTP is accepted only for loopback development. Missing or invalid configuration returns an error without sending a request. `audit_event_emit` sends `kind`, caller-asserted `source`, and `payload` to the configured service and validates its event receipt. The receipt does not prove durable storage or event completeness. Its shared token authenticates this MCP process, not the source label or tenant. Approve the write before calling it; omit secrets and personal data unless the service is approved for them. Hash-chain verification checks continuity only; it does not prove audit completeness.
 
 Schema validation checks the document shape and selected rules. A passing result is not proof of FERPA, COPPA, HIPAA, FDA, EU AI Act, CMMC, export-control status, or other legal compliance. `attestation_verify` checks a signature against the public key supplied by the caller; it does not establish the key owner's identity. `aup_check_compliance` evaluates eight disclosed fields only; it does not check policy scope, tool/vendor requirements, parent consent, or Tutor Cards. A true `allowed` value is not an authorization grant. DefenseTech tools calculate from supplied data; they do not classify materials or verify a person's status or license. Positive Decision Cards require the live policy engine's identity, scope, action, expiry, and trusted-attestation checks before an enforceable bundle can be created.
@@ -217,6 +219,7 @@ npm install
 npm run typecheck
 npm test
 npm run build
+node scripts/verify-schema-stdio.mjs
 ```
 
 ## License

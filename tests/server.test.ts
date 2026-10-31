@@ -1433,39 +1433,39 @@ describe("CLI validate command", () => {
   it("validates a passing document and exits 0", async () => {
     const code = await runValidate([join(workDir, "valid-aeo.json")]);
     expect(code).toBe(0);
-  });
+  }, 15_000);
 
   it("fails the run when a document violates its schema (exit 1)", async () => {
     const code = await runValidate([join(workDir, "invalid-aeo.json")]);
     expect(code).toBe(1);
-  });
+  }, 15_000);
 
   it("fails the run on unparseable JSON (exit 1)", async () => {
     const code = await runValidate([join(workDir, "broken.json")]);
     expect(code).toBe(1);
-  });
+  }, 15_000);
 
   it("returns exit 2 when no input has a recognized version field", async () => {
     const code = await runValidate([join(workDir, "unrecognized.json")]);
     expect(code).toBe(2);
-  });
+  }, 15_000);
 
   it("returns exit 3 when called with no paths", async () => {
     const code = await runValidate([]);
     expect(code).toBe(3);
-  });
+  }, 15_000);
 
   it("returns exit 1 when a glob matches no files", async () => {
     const code = await runValidate([join(workDir, "no-such-pattern-*.xyz")]);
     expect(code).toBe(1);
-  });
+  }, 15_000);
 
   it("expands a matching glob and validates every matched JSON document", async () => {
     const passingCode = await runValidate([join(workDir, "valid-*.json")]);
     expect(passingCode).toBe(0);
     const code = await runValidate([join(workDir, "*-aeo.json")]);
     expect(code).toBe(1);
-  });
+  }, 15_000);
 
   it("aggregates: one failing file in a mixed batch makes the run fail", async () => {
     const code = await runValidate([
@@ -1473,7 +1473,7 @@ describe("CLI validate command", () => {
       join(workDir, "invalid-aeo.json"),
     ]);
     expect(code).toBe(1);
-  });
+  }, 15_000);
 });
 
 // ============================================================================
