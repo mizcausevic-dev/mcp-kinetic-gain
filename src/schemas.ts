@@ -161,7 +161,7 @@ export const agentCardSchema = z.object({
       z.object({
         suite: z.string(),
         result_uri: z.string(),
-        metrics: z.record(z.unknown()).optional(),
+        metrics: z.record(z.string(), z.unknown()).optional(),
         ran_at: z.string(),
       }),
     )
@@ -226,7 +226,7 @@ export const mcpToolCardSchema = z.object({
   }),
   schema: z.object({
     input_schema_uri: z.string().optional(),
-    input_schema_inline: z.record(z.unknown()).optional(),
+    input_schema_inline: z.record(z.string(), z.unknown()).optional(),
   }),
   safety: z.object({
     side_effect_class: z.enum(["read", "mutating", "external", "destructive"]),
@@ -261,7 +261,7 @@ export type McpToolCard = z.infer<typeof mcpToolCardSchema>;
 // ----------------------------------------------------------------------------
 // AI Tutor Card (EdTech extension of the Suite)
 // ----------------------------------------------------------------------------
-export const tutorCardSchema = z
+export const tutorCardDisclosureSchema = z
   .object({
     tutor_card_version: z.string(),
     tutor: z.object({
@@ -326,7 +326,7 @@ export const tutorCardSchema = z
         z.object({
           suite: z.string(),
           result_uri: z.string(),
-          metrics: z.record(z.unknown()).optional(),
+          metrics: z.record(z.string(), z.unknown()).optional(),
           ran_at: z.string(),
         }),
       )
@@ -340,6 +340,14 @@ export const tutorCardSchema = z
       .optional(),
   })
   .strict();
+export const tutorCardSchema = tutorCardDisclosureSchema.superRefine((card, context) => {
+  if (card.audience.age_range_min > card.audience.age_range_max) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["audience", "age_range_max"], message: "Maximum age must not be less than minimum age." });
+  }
+  if (card.audience.age_range_min < 13 && !card.data_privacy.coppa_compliant) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["data_privacy", "coppa_compliant"], message: "Under-13 audience requires coppa_compliant=true as a publisher disclosure." });
+  }
+});
 export type TutorCard = z.infer<typeof tutorCardSchema>;
 
 // ----------------------------------------------------------------------------
@@ -800,7 +808,7 @@ export const clinicalAiCardSchema = z
     evaluations: z.array(z.object({
       suite: z.string(),
       result_uri: z.string(),
-      metrics: z.record(z.unknown()).optional(),
+      metrics: z.record(z.string(), z.unknown()).optional(),
       ran_at: z.string(),
       accreditation_body: z.string().optional(),
     })).optional(),

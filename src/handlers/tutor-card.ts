@@ -1,10 +1,22 @@
-import { tutorCardSchema, type TutorCard } from "../schemas.js";
-import { errorJson, fetchJson, pretty, stripTrailingSlashes } from "../common.js";
+import { tutorCardDisclosureSchema, tutorCardSchema, type TutorCard } from "../schemas.js";
+import { errorJson, fetchJson, pretty } from "../common.js";
+import { isIP } from "node:net";
 
 const WELL_KNOWN_PREFIX = "/.well-known/tutors/";
+const TUTOR_ID = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export function tutorWellKnownUrl(origin: string, tutor_id: string): string {
-  return stripTrailingSlashes(origin) + WELL_KNOWN_PREFIX + encodeURIComponent(tutor_id) + ".json";
+  const parsed = new URL(origin);
+  const host = parsed.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (
+    parsed.protocol !== "https:" || parsed.username || parsed.password ||
+    parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash ||
+    isIP(host) !== 0 || host === "localhost" || host.endsWith(".local")
+  ) {
+    throw new Error("origin must be an HTTPS hostname without credentials, port, path, query, fragment, or local/IP host");
+  }
+  if (!TUTOR_ID.test(tutor_id)) throw new Error("tutor_id must be a kebab-case identifier");
+  return parsed.origin + WELL_KNOWN_PREFIX + tutor_id + ".json";
 }
 
 async function loadCard(args: {
@@ -13,6 +25,15 @@ async function loadCard(args: {
 }): Promise<TutorCard> {
   if (args.document_json) return tutorCardSchema.parse(JSON.parse(args.document_json));
   if (args.url) return tutorCardSchema.parse(await fetchJson(args.url));
+  throw new Error("must provide either `url` or `document_json`");
+}
+
+async function loadCardDisclosure(args: {
+  url?: string;
+  document_json?: string;
+}): Promise<TutorCard> {
+  if (args.document_json) return tutorCardDisclosureSchema.parse(JSON.parse(args.document_json));
+  if (args.url) return tutorCardDisclosureSchema.parse(await fetchJson(args.url));
   throw new Error("must provide either `url` or `document_json`");
 }
 
@@ -38,7 +59,7 @@ function checkCoppa(card: TutorCard) {
   }
   return {
     ok: false,
-    reason: `SPEC VIOLATION: audience min age is ${minAge} (<13) but coppa_compliant=false. This is procurement-blocking for any US K-12 deployment.`,
+    reason: `SPEC VIOLATION: audience min age is ${minAge} (<13) but coppa_compliant=false. The publisher disclosure needs correction and independent review before procurement.`,
     age_range_min: minAge,
     coppa_compliant: coppa,
   };
@@ -158,7 +179,7 @@ export async function handleTutorCardCoppaCheck(args: {
   url?: string;
   document_json?: string;
 }): Promise<string> {
-  const card = await loadCard(args);
+  const card = await loadCardDisclosure(args);
   const result = checkCoppa(card);
   if (!result.ok) {
     return errorJson("coppa_violation", { tutor_id: card.tutor.id, ...result });

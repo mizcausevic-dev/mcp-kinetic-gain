@@ -68,6 +68,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { toolDescriptors } from "./tools.js";
+import { selectToolProfile } from "./tool-profiles.js";
 import { PACKAGE_VERSION } from "./version.js";
 
 import {
@@ -322,19 +323,22 @@ function isStructuredErrorResult(name: string, result: string): boolean {
   }
 }
 
-export function buildServer(): Server {
+export function buildServer(profileName?: string): Server {
+  const profile = selectToolProfile(profileName);
   const server = new Server(
     { name: "mcp-kinetic-gain", version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: toolDescriptors,
+    tools: profile.descriptors,
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    const handler = handlers[name];
+    const handler = profile.names.has(name) && Object.prototype.hasOwnProperty.call(handlers, name)
+      ? handlers[name]
+      : undefined;
     if (!handler) {
       return {
         content: [{ type: "text", text: `unknown tool: ${name}` }],
@@ -357,11 +361,12 @@ export function buildServer(): Server {
 }
 
 async function main(): Promise<void> {
-  const server = buildServer();
+  const profile = selectToolProfile();
+  const server = buildServer(profile.name);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools across 12 specs + DefenseTech)\n`,
+    `mcp-kinetic-gain v${PACKAGE_VERSION}: listening on stdio (${toolDescriptors.length} tools available; profile ${profile.name} lists ${profile.descriptors.length})\n`,
   );
 }
 
