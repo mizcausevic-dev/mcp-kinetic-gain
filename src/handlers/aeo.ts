@@ -16,7 +16,7 @@ export function aeoWellKnownUrl(origin: string): string {
     parsed.pathname !== "/" || parsed.search || parsed.hash ||
     isIP(parsed.hostname.replace(/^\[|\]$/g, "")) !== 0
   ) {
-    throw new TypeError("AEO origin must be a public HTTPS hostname without credentials, path, query, or fragment");
+    throw new TypeError("AEO origin must be an HTTPS hostname without credentials, path, query, or fragment");
   }
   return parsed.origin + AEO_WELL_KNOWN_PATH;
 }
