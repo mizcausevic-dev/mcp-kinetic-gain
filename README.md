@@ -144,6 +144,12 @@ Restart Claude. All 75 tools appear in the tools panel. Try:
 
 > *"Use aeo_inspect on https://mizcausevic-dev.github.io to summarize the entity declaration, then use ai_evidence_verify_hash to check the content_hash of an evidence object against my candidate text."*
 
+### Optional smaller tool menu (source candidate)
+
+This profile is a source candidate and is **not in the published `0.10.0` package**. The default, or `MCP_KG_TOOL_PROFILE=compat`, still lists all 75 tools. A source checkout built from this branch can set `MCP_KG_TOOL_PROFILE=core` to list 20 selected tools from the same executable and client entry. Add `"env": {"MCP_KG_TOOL_PROFILE": "core"}` to the `kinetic-gain` object above when testing this checkout. Calls to tools outside the selected menu return an MCP error, including direct calls by name. An unknown profile value stops startup with an error on stderr.
+
+The [core names](src/tool-profiles.ts) are a task-selection hypothesis, not a claim of compliance or a measured maintenance capacity. The other 55 handlers remain in the compatibility surface and need fixes while callable. Aviation PR #52 is separate: its current opt-in mode lists 80 tools, and no 25-tool combined profile has been built or tested.
+
 ## CLI mode (v0.5.1+)
 
 The same binary doubles as a Suite JSON validator outside any MCP host. Useful in CI, pre-commit hooks, or local sanity-checks.
