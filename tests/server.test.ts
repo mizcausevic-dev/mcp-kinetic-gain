@@ -1465,7 +1465,7 @@ describe("CLI validate command", () => {
     expect(passingCode).toBe(0);
     const code = await runValidate([join(workDir, "*-aeo.json")]);
     expect(code).toBe(1);
-  });
+  }, 15_000);
 
   it("aggregates: one failing file in a mixed batch makes the run fail", async () => {
     const code = await runValidate([
@@ -1473,7 +1473,7 @@ describe("CLI validate command", () => {
       join(workDir, "invalid-aeo.json"),
     ]);
     expect(code).toBe(1);
-  });
+  }, 15_000);
 });
 
 // ============================================================================

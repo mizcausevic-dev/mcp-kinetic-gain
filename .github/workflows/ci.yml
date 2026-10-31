@@ -28,3 +28,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: node scripts/verify-schema-stdio.mjs
+      - run: node scripts/probe-tool-args.mjs

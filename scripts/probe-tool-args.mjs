@@ -14,12 +14,14 @@
 //      inferred from source alone.
 //   2. traversal-string    : a non-URL path-traversal-style string.
 //   3. wrong-type          : a number where a string is required.
-//   4. extra-property      : an undeclared field alongside a valid value,
-//      to check whether additionalProperties:false in the tool schema is
-//      actually enforced (it is not, per the earlier aeo_well_known_url
-//      finding -- this reconfirms it across every flagged tool).
+//   4. extra-property      : an undeclared field. The URL in this probe is
+//      intentionally blocked by the SSRF guard, so a generic tool error is
+//      NOT proof that additionalProperties:false was enforced. Require the
+//      MCP boundary's explicit invalid-arguments result instead.
 //
-// Separately, SCHEMA_BYPASS_TARGETS covers tools whose *declared* schema
+// A harmless URL calculator is the known-positive control for this check:
+// its valid call must succeed, while the same call with an extra field must
+// fail at the schema boundary. Separately, SCHEMA_BYPASS_TARGETS covers tools whose *declared* schema
 // only exposes `document_json`, but whose handler internally shares a
 // loadDoc()/loadCard() helper that also accepts `url`. This checks whether
 // sending the undeclared `url` field gets honored anyway.
@@ -171,6 +173,20 @@ async function main() {
 
   const rows = [];
 
+  const safeBase = await client.callTool("aeo_well_known_url", { origin: "https://example.com" });
+  rows.push({
+    tool: "aeo_well_known_url", probe: "known-positive(valid declared call)", input: "origin=https://example.com",
+    verdict: !isErrorish(safeBase) ? "PASS" : "FAIL",
+    note: !isErrorish(safeBase) ? "" : resultText(safeBase).slice(0, 100),
+  });
+  const safeExtra = await client.callTool("aeo_well_known_url", { origin: "https://example.com", __unexpected_probe_field__: "x" });
+  const safeExtraRejected = resultText(safeExtra).includes("invalid arguments for aeo_well_known_url:");
+  rows.push({
+    tool: "aeo_well_known_url", probe: "known-negative(extra property)", input: "+ __unexpected_probe_field__",
+    verdict: safeExtraRejected ? "PASS" : "FAIL",
+    note: safeExtraRejected ? "" : resultText(safeExtra).slice(0, 100),
+  });
+
   for (const t of TARGETS) {
     const base = { ...(t.extra ?? {}) };
 
@@ -198,10 +214,10 @@ async function main() {
     });
 
     const r4 = await client.callTool(t.tool, { ...base, [t.field]: markerUrl, __unexpected_probe_field__: "x" }).catch((e) => ({ error: String(e) }));
-    const r4err = isErrorish(r4);
+    const r4schemaRejected = resultText(r4).includes(`invalid arguments for ${t.tool}:`);
     rows.push({
       tool: t.tool, probe: "extra-property", input: "+ __unexpected_probe_field__",
-      verdict: r4err ? "PASS" : "FAIL", note: r4err ? "" : "additionalProperties:false not enforced",
+      verdict: r4schemaRejected ? "PASS" : "FAIL", note: r4schemaRejected ? "" : "no explicit MCP schema rejection",
     });
   }
 
@@ -209,10 +225,11 @@ async function main() {
     probeHits = [];
     const r = await client.callTool(tool, { url: markerUrl }).catch((e) => ({ error: String(e) }));
     const hit = probeHits.length > 0;
+    const schemaRejected = resultText(r).includes(`invalid arguments for ${tool}:`);
     rows.push({
       tool, probe: "schema-bypass(url on document_json-only tool)", input: `url=<local-server>`,
-      verdict: hit ? "FAIL" : "PASS",
-      note: hit ? "schema declares document_json only; handler honored undeclared url" : (isErrorish(r) ? "rejected" : "accepted, no fetch"),
+      verdict: !hit && schemaRejected ? "PASS" : "FAIL",
+      note: hit ? "undeclared URL reached local server" : (schemaRejected ? "rejected by MCP schema" : "no explicit MCP schema rejection"),
     });
   }
 
@@ -226,7 +243,7 @@ async function main() {
   console.log(`\n${rows.length} probes, ${failCount} FAIL, ${rows.length - failCount} PASS`);
 
   probeServer.close();
-  process.exit(0);
+  process.exit(failCount === 0 ? 0 : 1);
 }
 
 main().catch((e) => {

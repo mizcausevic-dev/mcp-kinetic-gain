@@ -62,6 +62,8 @@ import { pathToFileURL } from "node:url";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
+import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -323,6 +325,17 @@ function isStructuredErrorResult(name: string, result: string): boolean {
 }
 
 export function buildServer(): Server {
+  // The low-level Server does not enforce inputSchema at tools/call. Compile
+  // every advertised contract before accepting requests so an invalid schema
+  // stops startup instead of silently bypassing validation.
+  const provider = new AjvJsonSchemaValidator();
+  const inputValidators = new Map(toolDescriptors.map((tool) => [
+    tool.name,
+    provider.getValidator(tool.inputSchema as JsonSchemaType),
+  ]));
+  if (inputValidators.size !== toolDescriptors.length) {
+    throw new Error("duplicate MCP tool descriptor name");
+  }
   const server = new Server(
     { name: "mcp-kinetic-gain", version: PACKAGE_VERSION },
     { capabilities: { tools: {} } },
@@ -334,15 +347,25 @@ export function buildServer(): Server {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    const handler = handlers[name];
-    if (!handler) {
+    const handler = Object.prototype.hasOwnProperty.call(handlers, name)
+      ? handlers[name]
+      : undefined;
+    const validate = inputValidators.get(name);
+    if (!handler || !validate) {
       return {
         content: [{ type: "text", text: `unknown tool: ${name}` }],
         isError: true,
       };
     }
+    const validation = validate(args ?? {});
+    if (!validation.valid) {
+      return {
+        content: [{ type: "text", text: `invalid arguments for ${name}: ${validation.errorMessage}` }],
+        isError: true,
+      };
+    }
     try {
-      const result = await handler(args ?? {});
+      const result = await handler(validation.data);
       const content = [{ type: "text" as const, text: result }];
       return isStructuredErrorResult(name, result)
         ? { content, isError: true }
